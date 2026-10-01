@@ -6,10 +6,14 @@ on:
 
 permissions:
   contents: write
+  # Lets azure/login trade the job's OIDC token for an Azure token.
+  id-token: write
 
 jobs:
   release:
     runs-on: windows-latest
+    # Holds the Azure and signing variables. The Entra app trusts only this environment.
+    environment: release
     steps:
       - uses: actions/checkout@v4
 
@@ -35,6 +39,27 @@ jobs:
           -p:Version=${{ steps.version.outputs.version }}
           -o publish
 
+      - name: Sign in to Azure
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # Sign only our own binaries, before the zip and the installer pick them up.
+      # The .NET runtime and the NAPS2 and other third-party files keep their
+      # publishers' signatures (and stay unmodified, per THIRD-PARTY-NOTICES.md).
+      - name: Sign app binaries
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: gcgov-certificate-profile-public
+          # |- drops the trailing newline, which the action would turn into an empty entry.
+          files: |-
+            ${{ github.workspace }}\publish\ScanBridge.exe
+            ${{ github.workspace }}\publish\ScanBridge.dll
+
       - name: Zip portable build
         shell: pwsh
         run: |
@@ -49,6 +74,14 @@ jobs:
             /DAppVersion=${{ steps.version.outputs.version }} `
             /DPublishDir=..\publish
           Move-Item installer\Output\ScanBridge-${{ steps.version.outputs.version }}-setup.exe .
+
+      - name: Sign installer
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: gcgov-certificate-profile-public
+          files: ${{ github.workspace }}\ScanBridge-${{ steps.version.outputs.version }}-setup.exe
 
       - name: Create release
         uses: softprops/action-gh-release@v2
