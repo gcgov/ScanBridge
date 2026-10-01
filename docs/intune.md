@@ -24,11 +24,26 @@ assignments, so you assign the app one time only.
 
 The job skips the upload in these cases:
 
-- The `INTUNE_APP_ID` variable is not set.
+- The `INTUNE_APP_ID` or `INTUNE_CLIENT_ID` variable is not set.
 - The tag is a prerelease, such as `v1.2.0-beta`. Intune compares versions as numbers
   only.
 
 The script that does the upload is `.github/scripts/Publish-IntuneWin32App.ps1`.
+
+## Identity and approval
+
+The `intune` job keeps the Intune upload apart from code signing:
+
+- It runs in the `intune` GitHub environment, not the `release` environment.
+- It signs in as its own Microsoft Entra app, the *Intune publisher app*. This app can
+  update Intune apps, but it cannot sign code. The signing app cannot change Intune.
+- Required reviewers on the `intune` environment approve each upload. The `release` job
+  builds, signs, and publishes the release first. The `intune` job then waits for
+  approval.
+
+Microsoft Graph cannot limit `DeviceManagementApps.ReadWrite.All` to specific Intune
+apps. The permission covers every Intune app in the tenant. The approval step and the
+environment rules limit when the workflow can use it.
 
 ## App settings
 
@@ -51,25 +66,39 @@ starts it again. On a first install, ScanBridge opens its settings window.
 
 You need these roles:
 
+- **Application Administrator** in Microsoft Entra, to create the Intune publisher app.
 - **Privileged Role Administrator** or **Global Administrator** in Microsoft Entra, to
   grant admin consent.
 - **Intune Administrator**, or an Intune role that can create and assign apps.
+- The **Admin** role on the GitHub repository, to create the environment.
 
-### 1. Let the Entra app manage Intune apps
+### 1. Create the Intune publisher app
 
-The workflow signs in with the same Entra app that signs the files. Give that app
-permission to update Intune apps.
+PrintBridge, ScanBridge, and Tax Import Processor share one Intune publisher app. If
+the app exists already, go to item 7 to add this repository.
 
 1. In the [Microsoft Entra admin center](https://entra.microsoft.com), go to
-   **Identity** > **Applications** > **App registrations**.
-2. Open the app with the client ID in the `AZURE_CLIENT_ID` variable.
-3. Select **API permissions** > **Add a permission** > **Microsoft Graph** >
+   **Entra ID** > **App registrations** > **New registration**.
+2. Set **Name** to `GitHub Intune publisher`.
+3. Select **Accounts in this organizational directory only**, and then select
+   **Register**.
+4. Select **API permissions** > **Add a permission** > **Microsoft Graph** >
    **Application permissions**.
-4. Select `DeviceManagementApps.ReadWrite.All`, and then select **Add permissions**.
-5. Select **Grant admin consent for \<your tenant\>**.
+5. Select `DeviceManagementApps.ReadWrite.All`, and then select **Add permissions**.
+6. Select **Grant admin consent for \<your tenant\>**.
+7. Select **Certificates & secrets** > **Federated credentials** > **Add credential**.
+8. Set **Federated credential scenario** to **GitHub Actions deploying Azure
+   resources**, and set these values:
+   - **Organization**: `gcgov`
+   - **Repository**: `ScanBridge`
+   - **Entity type**: **Environment**
+   - **GitHub environment name**: `intune`
+   - **Name**: `ScanBridge-intune`
+9. Select **Add**.
+10. On the **Overview** page, copy the **Application (client) ID**.
 
-This permission lets the app change every Intune app in the tenant. The federated
-credential limits its use to the `release` environment of this repository.
+Do not add a client secret. The workflow signs in with OpenID Connect (OIDC), so GitHub
+stores no secret. Do not give this app any Azure subscription role.
 
 ### 2. Create the Win32 app in Intune
 
@@ -106,31 +135,53 @@ latest release.
     device groups. Start with a small pilot group, then add the other groups.
 12. Select **Create**.
 
-### 3. Give the workflow the app ID
+### 3. Create the `intune` environment
 
 1. In the Intune admin center, open the new app. The app ID is the GUID in the browser
    address, after `appId/`.
-2. In GitHub, go to **Settings** > **Environments** > **release**.
-3. Add the variable `INTUNE_APP_ID` with the app ID as its value.
+2. In GitHub, go to **Settings** > **Environments** > **New environment**.
+3. Set **Name** to `intune`, and then select **Configure environment**.
+4. Select **Required reviewers**. Add the people who approve deployments, and then
+   select **Save protection rules**.
+5. Under **Deployment branches and tags**, select **Selected branches and tags**.
+6. Select **Add deployment branch or tag rule**. Set **Ref type** to **Tag**, set
+   **Name pattern** to `v*`, and then select **Add rule**.
+7. Under **Environment variables**, add these variables:
+
+   | Variable | Value |
+   |---|---|
+   | `INTUNE_CLIENT_ID` | The client ID of the Intune publisher app, from step 1. |
+   | `AZURE_TENANT_ID` | The Microsoft Entra tenant ID. Use the same value as in the `release` environment. |
+   | `INTUNE_APP_ID` | The app ID, from item 1 of this step. |
+
+The tag rule lets only `v*` tags use the environment. A workflow on another branch or
+tag cannot sign in as the Intune publisher app.
+
+To limit who can create `v*` tags, add a tag ruleset in **Settings** > **Rules** >
+**Rulesets**.
 
 ## Check a release
 
 1. Push a new tag, such as `v1.2.0`.
-2. In the **Actions** tab, open the **Release** run. The `intune` job ends with a line
+2. In the **Actions** tab, open the **Release** run. After the `release` job, select
+   **Review deployments**. Select **intune**, and then select **Approve and deploy**.
+3. Wait for the `intune` job to finish. The job ends with a line
    such as `Intune app 'ScanBridge' now deploys version 1.2.0`.
-3. In the Intune admin center, open the app. The **Properties** page shows the new
+4. In the Intune admin center, open the app. The **Properties** page shows the new
    version and the new detection rule.
-4. On a pilot computer, open **Company Portal** and select **Sync**. Intune installs the
+5. On a pilot computer, open **Company Portal** and select **Sync**. Intune installs the
    new version within a few minutes. Without a sync, the Intune Management Extension
    checks for apps about every 8 hours.
-5. Open **Device install status** on the app to watch the other computers.
+6. Open **Device install status** on the app to watch the other computers.
 
 ## Troubleshooting
 
 | Symptom | Cause and fix |
 |---|---|
-| `azure/login` fails in the `intune` job | The Entra app has no federated credential for the `release` environment. Add one. |
-| `403 Forbidden` from Microsoft Graph | The Entra app has no `DeviceManagementApps.ReadWrite.All` permission, or no admin consent. Do step 1 again. |
+| The `intune` job waits | The job waits for a required reviewer. Select **Review deployments** on the run. |
+| The `intune` job says it skipped the upload | Set `INTUNE_APP_ID` and `INTUNE_CLIENT_ID` in the `intune` environment. |
+| `azure/login` fails in the `intune` job | The Intune publisher app has no federated credential for the `intune` environment of this repository, or `AZURE_TENANT_ID` is missing from the `intune` environment. |
+| `403 Forbidden` from Microsoft Graph | The Intune publisher app has no `DeviceManagementApps.ReadWrite.All` permission, or no admin consent. Do step 1 again. |
 | `404 Not Found` from Microsoft Graph | `INTUNE_APP_ID` does not match an app in the tenant. Check the value. |
 | The install fails on a computer | Read `C:\ProgramData\Microsoft\IntuneManagementExtension\Logs\AppWorkload.log` on that computer. |
 

@@ -107,8 +107,9 @@ jobs:
   intune:
     needs: release
     runs-on: windows-latest
-    # The Entra app trusts only this environment.
-    environment: release
+    # Holds the Intune variables. The Intune Entra app trusts only this environment. Add
+    # required reviewers to the environment to approve each upload before it starts.
+    environment: intune
     # One upload at a time, so that two tags cannot race on the same Intune app.
     concurrency:
       group: intune
@@ -122,9 +123,10 @@ jobs:
         id: check
         shell: pwsh
         run: |
-          $deploy = '${{ vars.INTUNE_APP_ID }}' -ne '' -and $env:VERSION -match '^\d+(\.\d+){1,3}$'
+          $configured = '${{ vars.INTUNE_APP_ID }}' -ne '' -and '${{ vars.INTUNE_CLIENT_ID }}' -ne ''
+          $deploy = $configured -and $env:VERSION -match '^\d+(\.\d+){1,3}$'
           "deploy=$($deploy.ToString().ToLower())" >> $env:GITHUB_OUTPUT
-          if (-not $deploy) { Write-Host "Skipped: INTUNE_APP_ID is not set, or $env:VERSION is a prerelease." }
+          if (-not $deploy) { Write-Host "Skipped: INTUNE_APP_ID or INTUNE_CLIENT_ID is not set, or $env:VERSION is a prerelease." }
 
       - uses: actions/checkout@v4
         if: steps.check.outputs.deploy == 'true'
@@ -152,13 +154,15 @@ jobs:
           Copy-Item "ScanBridge-$env:VERSION-setup.exe" intune-package/ScanBridge-setup.exe
           Copy-Item installer/intune/uninstall.cmd intune-package/
 
-      - name: Sign in to Azure
+      # Signs in as the Intune Entra app, not the signing app. The Intune app has
+      # Microsoft Graph rights only, and no Azure subscription.
+      - name: Sign in to Microsoft Entra
         if: steps.check.outputs.deploy == 'true'
         uses: azure/login@v3
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          client-id: ${{ vars.INTUNE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          allow-no-subscriptions: true
 
       - name: Upload to Intune
         if: steps.check.outputs.deploy == 'true'
