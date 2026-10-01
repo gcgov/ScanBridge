@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+
+PackageIdentifier: GarrettCountyGovernment.ScanBridge
+PackageVersion: 1.0.1
+InstallerType: inno
+Scope: user
+UpgradeBehavior: install
+# Inno Setup names the uninstall registry key after the AppId in installer/ScanBridge.iss.
+ProductCode: '{9C2E6F0A-3B7D-4A1E-9F5C-7B8A2D4E6F10}_is1'
+ReleaseDate: 2026-10-01
+AppsAndFeaturesEntries:
+- Publisher: ScanBridge contributors
+  ProductCode: '{9C2E6F0A-3B7D-4A1E-9F5C-7B8A2D4E6F10}_is1'
+Installers:
+- Architecture: x64
+  InstallerUrl: https://github.com/gcgov/ScanBridge/releases/download/v1.0.1/ScanBridge-1.0.1-setup.exe
+  InstallerSha256: 6964C91126150DD033209E720FBAA24672CB965ABE00D455D41C2740CFE8EC66
+ManifestType: installer
+ManifestVersion: 1.10.0

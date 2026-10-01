@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+
+PackageIdentifier: GarrettCountyGovernment.ScanBridge
+PackageVersion: 1.0.1
+PackageLocale: en-US
+Publisher: Garrett County Government
+PublisherUrl: https://github.com/gcgov
+PublisherSupportUrl: https://github.com/gcgov/ScanBridge/issues
+Author: Garrett County Government
+PackageName: ScanBridge
+PackageUrl: https://github.com/gcgov/ScanBridge
+License: MIT
+LicenseUrl: https://github.com/gcgov/ScanBridge/blob/main/LICENSE
+Copyright: Copyright (c) 2026 Garrett County Government
+ShortDescription: Lets web applications scan documents from desktop scanners through a local HTTP API.
+Description: |-
+  ScanBridge is a Windows tray app that scans documents for web applications.
+  A web page calls the local HTTP API on 127.0.0.1.
+  ScanBridge scans from a WIA, TWAIN, or ESCL scanner through the NAPS2 SDK.
+  It returns the result to the page as a PDF file.
+  An administrator lists the website origins that can scan.
+Tags:
+- document
+- escl
+- pdf
+- scan
+- scanner
+- tray
+- twain
+- web
+- wia
+ReleaseNotesUrl: https://github.com/gcgov/ScanBridge/releases/tag/v1.0.1
+Documentations:
+- DocumentLabel: HTTP API
+  DocumentUrl: https://github.com/gcgov/ScanBridge/blob/main/docs/api.md
+ManifestType: defaultLocale
+ManifestVersion: 1.10.0

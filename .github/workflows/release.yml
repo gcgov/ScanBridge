@@ -14,6 +14,8 @@ jobs:
     runs-on: windows-latest
     # Holds the Azure and signing variables. The Entra app trusts only this environment.
     environment: release
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -90,3 +92,50 @@ jobs:
             ScanBridge-${{ steps.version.outputs.version }}-win-x64-portable.zip
             ScanBridge-${{ steps.version.outputs.version }}-setup.exe
           generate_release_notes: true
+
+  # Opens a pull request on microsoft/winget-pkgs for the signed installer.
+  # A separate job, so a winget problem never fails the release, and a re-run retries only this part.
+  winget:
+    needs: release
+    # Tags with a hyphen, such as v1.2.0-beta.1, are pre-releases and stay off winget.
+    if: ${{ !contains(needs.release.outputs.version, '-') }}
+    runs-on: windows-latest
+    # Holds the WINGET_TOKEN secret, out of reach of workflows on branches.
+    environment: release
+    permissions: {}
+    env:
+      PACKAGE_ID: GarrettCountyGovernment.ScanBridge
+      VERSION: ${{ needs.release.outputs.version }}
+      # wingetcreate reads its GitHub token from this variable.
+      WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
+    steps:
+      - name: Submit to winget
+        shell: pwsh
+        run: |
+          if (-not $env:WINGET_CREATE_GITHUB_TOKEN) {
+            "::error::Add the WINGET_TOKEN secret to the release environment (see README.md)."
+            exit 1
+          }
+
+          # wingetcreate updates a package from its previous version in winget-pkgs.
+          # The first version goes in by hand (see README.md), so skip until it is there.
+          $path = 'manifests/{0}/{1}' -f $env:PACKAGE_ID.Substring(0, 1).ToLower(), $env:PACKAGE_ID.Replace('.', '/')
+          $existing = Invoke-WebRequest "https://api.github.com/repos/microsoft/winget-pkgs/contents/$path" `
+            -Headers @{ Authorization = "Bearer $env:WINGET_CREATE_GITHUB_TOKEN" } -SkipHttpErrorCheck
+          if ($existing.StatusCode -eq 404) {
+            "::warning::$env:PACKAGE_ID is not in winget-pkgs yet. Submit the first version by hand (see README.md), then re-run this job."
+            exit 0
+          }
+          if ($existing.StatusCode -ne 200) {
+            throw "The GitHub API returned $($existing.StatusCode) for microsoft/winget-pkgs/$path."
+          }
+
+          curl.exe -fsSL -o wingetcreate.exe https://aka.ms/wingetcreate/latest
+          $release = "https://github.com/$env:GITHUB_REPOSITORY/releases"
+          # The Inno Setup bootstrapper is a 32-bit exe, so wingetcreate reads it as x86.
+          # "|x64" states the architecture of the app that it installs.
+          .\wingetcreate.exe update $env:PACKAGE_ID `
+            --version $env:VERSION `
+            --urls "$release/download/$env:GITHUB_REF_NAME/ScanBridge-$env:VERSION-setup.exe|x64" `
+            --release-notes-url "$release/tag/$env:GITHUB_REF_NAME" `
+            --submit --no-open

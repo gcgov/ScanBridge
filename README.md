@@ -112,6 +112,78 @@ installer is built with [Inno Setup](https://jrsoftware.org/isinfo.php) from
 3. Tray menu → **Scan test page** → your PDF viewer opens the scanned page.
 4. From a disallowed origin, a browser `fetch` must fail CORS.
 
+## Release
+
+Create a GitHub release on a new tag that starts with `v`, such as `v1.2.0`. The new tag
+starts the **Release** workflow. The workflow has two jobs:
+
+1. The `release` job tests, publishes, and signs ScanBridge. It attaches the portable zip and
+   the signed installer to the release.
+2. The `winget` job opens a pull request for the new version on
+   [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs). After the pull request
+   merges, `winget upgrade` offers the new version.
+
+The `winget` job skips tags with a hyphen, such as `v1.2.0-beta.1`, because they are
+pre-releases.
+
+### winget setup
+
+The winget package ID is `GarrettCountyGovernment.ScanBridge`. The `winget` job uses
+[WingetCreate](https://github.com/microsoft/winget-create). WingetCreate copies the manifest of
+the previous version from winget-pkgs. It then updates the version, the installer URL, and the
+installer hash. The job needs two things:
+
+- A `WINGET_TOKEN` secret in the `release` environment. Use a GitHub personal access token
+  (classic) with the `public_repo` scope. WingetCreate does not support fine-grained tokens.
+  The pull requests come from a fork of winget-pkgs under the account that owns the token.
+- A first version of the package in winget-pkgs. Until the first version merges, the job
+  skips with a warning.
+
+### Submit the first version to winget
+
+The `installer/winget` folder holds the manifests for version 1.0.1. You run these steps
+once, on a Windows computer, from the repository root:
+
+1. Install WingetCreate:
+
+   ```
+   winget install Microsoft.WingetCreate
+   ```
+
+2. Check the manifests:
+
+   ```
+   winget validate --manifest installer\winget
+   ```
+
+3. Allow installs from local manifests. Run this command in an administrator terminal:
+
+   ```
+   winget settings --enable LocalManifestFiles
+   ```
+
+4. Install ScanBridge from the manifests:
+
+   ```
+   winget install --manifest installer\winget
+   ```
+
+5. Confirm that **ScanBridge** shows in **Settings** > **Apps** > **Installed apps**.
+6. Submit the manifests. WingetCreate opens a browser window for the GitHub sign-in. Sign in
+   with the account that owns the `WINGET_TOKEN` token.
+
+   ```
+   wingetcreate submit installer\winget
+   ```
+
+7. On the pull request, sign the Microsoft Contributor License Agreement (CLA) when the bot
+   asks.
+8. Answer any moderator questions on the pull request.
+
+After the pull request merges, `winget install GarrettCountyGovernment.ScanBridge` works. The
+**Release** workflow submits each later version. If a release runs before the first pull
+request merges, re-run the `winget` job of that release.
+
 ## Licensing
 
 ScanBridge is MIT-licensed (see [LICENSE](LICENSE)).
