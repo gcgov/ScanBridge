@@ -26,6 +26,9 @@ Grab the latest release from the [Releases](../../releases) page:
 
 Both are self-contained: no .NET runtime install is required.
 
+Intune-managed computers get each new release automatically. See
+[docs/intune.md](docs/intune.md) for the setup.
+
 On first run the settings window opens. Pick your scanner, set the scan defaults, and —
 important — add the website origin(s) that are allowed to use the scanner.
 

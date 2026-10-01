@@ -45,6 +45,9 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
 [Run]
 Filename: "{app}\ScanBridge.exe"; Description: "Launch ScanBridge now"; \
   Flags: nowait postinstall skipifsilent
+; A silent install (Intune) closes a running ScanBridge before it replaces files.
+; Start it again. On a first install, it opens the settings window, as an interactive install does.
+Filename: "{app}\ScanBridge.exe"; Flags: nowait; Check: WizardSilent
 
 [UninstallRun]
 Filename: "taskkill"; Parameters: "/im ScanBridge.exe /f"; Flags: runhidden; RunOnceId: "KillScanBridge"
