@@ -14,6 +14,8 @@ jobs:
     runs-on: windows-latest
     # Holds the Azure and signing variables. The Entra app trusts only this environment.
     environment: release
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -90,3 +92,85 @@ jobs:
             ScanBridge-${{ steps.version.outputs.version }}-win-x64-portable.zip
             ScanBridge-${{ steps.version.outputs.version }}-setup.exe
           generate_release_notes: true
+
+      # The intune job packages this installer.
+      - name: Keep installer for Intune
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer
+          path: ScanBridge-${{ steps.version.outputs.version }}-setup.exe
+          retention-days: 7
+
+  # Uploads the signed installer to the existing Intune app, so that managed computers
+  # update. A separate job lets you re-run the Intune upload without a new release.
+  # See docs/intune.md for the one-time Intune setup.
+  intune:
+    needs: release
+    runs-on: windows-latest
+    # The Entra app trusts only this environment.
+    environment: release
+    # One upload at a time, so that two tags cannot race on the same Intune app.
+    concurrency:
+      group: intune
+      cancel-in-progress: false
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+    steps:
+      # Skip when Intune is not set up yet, or for a prerelease tag such as v1.2.0-beta.
+      # Intune compares versions as numbers only.
+      - name: Check Intune settings
+        id: check
+        shell: pwsh
+        run: |
+          $deploy = '${{ vars.INTUNE_APP_ID }}' -ne '' -and $env:VERSION -match '^\d+(\.\d+){1,3}$'
+          "deploy=$($deploy.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          if (-not $deploy) { Write-Host "Skipped: INTUNE_APP_ID is not set, or $env:VERSION is a prerelease." }
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.deploy == 'true'
+
+      - name: Get Win32 Content Prep Tool
+        if: steps.check.outputs.deploy == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: microsoft/Microsoft-Win32-Content-Prep-Tool
+          ref: v1.8.7
+          path: prep-tool
+
+      - name: Get installer
+        if: steps.check.outputs.deploy == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: installer
+
+      # A fixed setup file name keeps the Intune install command the same for every version.
+      - name: Stage package
+        if: steps.check.outputs.deploy == 'true'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory intune-package | Out-Null
+          Copy-Item "ScanBridge-$env:VERSION-setup.exe" intune-package/ScanBridge-setup.exe
+          Copy-Item installer/intune/uninstall.cmd intune-package/
+
+      - name: Sign in to Azure
+        if: steps.check.outputs.deploy == 'true'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Upload to Intune
+        if: steps.check.outputs.deploy == 'true'
+        shell: pwsh
+        run: >
+          ./.github/scripts/Publish-IntuneWin32App.ps1
+          -AppId '${{ vars.INTUNE_APP_ID }}'
+          -SourceFolder intune-package
+          -SetupFile ScanBridge-setup.exe
+          -Version $env:VERSION
+          -InstallCommandLine 'ScanBridge-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /CLOSEAPPLICATIONS'
+          -UninstallCommandLine 'uninstall.cmd'
+          -DetectionKeyPath 'HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\{9C2E6F0A-3B7D-4A1E-9F5C-7B8A2D4E6F10}_is1'
+          -PrepToolPath prep-tool/IntuneWinAppUtil.exe
+          -OutputFolder "$env:RUNNER_TEMP/intunewin"
