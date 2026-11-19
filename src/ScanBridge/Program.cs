@@ -20,8 +20,7 @@ internal static class Program
             return;
         }
 
-        var logDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ScanBridge", "logs");
+        var logDirectory = ScanBridge.App.LogFolder.Path;
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
             .WriteTo.File(
@@ -48,7 +47,7 @@ internal static class Program
 
             using var loggerFactory = new SerilogLoggerFactory(Log.Logger);
             using var scannerService = new ScannerService(loggerFactory.CreateLogger("ScanBridge.Scanning"));
-            using var jobManager = new ScanJobManager(scannerService.ScanToPdfAsync);
+            using var jobManager = new ScanJobManager(scannerService.ScanAsync);
             var webHostRunner = new WebHostRunner(settingsStore, scannerService, jobManager, Log.Logger);
 
             settingsStore.Changed += settings =>

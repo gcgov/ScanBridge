@@ -60,11 +60,13 @@ public sealed class WebHostRunner : IAsyncDisposable
                 builder.Services.AddCors(options => options.AddPolicy(CorsPolicyName, policy => policy
                     .WithOrigins(settings.AllowedOrigins.ToArray())
                     .WithMethods("GET", "POST", "DELETE")
-                    .AllowAnyHeader()));
+                    .WithHeaders(RequestGuards.RequiredHeaderName, "Content-Type")));
                 builder.WebHost.ConfigureKestrel(kestrel => kestrel.Listen(IPAddress.Loopback, settings.Port));
 
                 var app = builder.Build();
+                app.UseHostValidation(settings.Port);
                 app.UseCors(CorsPolicyName);
+                app.UseRequiredHeader();
                 ApiEndpoints.Map(app, _settingsStore, _scannerService, _jobManager);
 
                 await app.StartAsync().ConfigureAwait(false);
@@ -77,7 +79,7 @@ public sealed class WebHostRunner : IAsyncDisposable
             {
                 IsRunning = false;
                 LastError = ex is IOException
-                    ? $"Could not listen on port {settings.Port} — it may be in use by another program."
+                    ? $"Impossibile mettersi in ascolto sulla porta {settings.Port}: potrebbe essere usata da un altro programma."
                     : ex.Message;
                 _logger.Error(ex, "Failed to start the ScanBridge API on port {Port}", settings.Port);
             }

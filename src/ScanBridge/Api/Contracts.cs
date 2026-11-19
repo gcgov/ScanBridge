@@ -37,6 +37,12 @@ public sealed class StartScanRequest
     public bool? ExcludeBlankPages { get; set; }
 
     public bool? AutoDeskew { get; set; }
+
+    /// <summary>"pdf" (default) or "jpg". With "jpg" only the first scanned image is returned.</summary>
+    public string? Format { get; set; }
+
+    /// <summary>JPEG quality 1-100. Only used with "jpg"; omitted falls back to the settings window.</summary>
+    public int? JpegQuality { get; set; }
 }
 
 public sealed record StartScanResponse(string JobId);

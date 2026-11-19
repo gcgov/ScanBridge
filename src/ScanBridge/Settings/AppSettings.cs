@@ -1,3 +1,5 @@
+using ScanBridge.Scanning;
+
 namespace ScanBridge.Settings;
 
 /// <summary>
@@ -86,12 +88,21 @@ public sealed class ScanDefaults
     public string ColorMode { get; set; } = "color";
 
     /// <summary>"letter", "legal" or "a4".</summary>
-    public string PageSize { get; set; } = "letter";
+    public string PageSize { get; set; } = "a4";
 
     /// <summary>Drop pages the scanner returns that are (nearly) blank — useful for duplex.</summary>
     public bool ExcludeBlankPages { get; set; }
 
     public bool AutoDeskew { get; set; }
+
+    /// <summary>
+    /// Output format used when a request does not specify one: "pdf" or "jpg"
+    /// (jpg returns only the first scanned image).
+    /// </summary>
+    public string Format { get; set; } = "pdf";
+
+    /// <summary>JPEG quality, 1-100, used when the output format is jpg.</summary>
+    public int JpegQuality { get; set; } = ScanFormats.DefaultJpegQuality;
 
     public ScanDefaults Clone() => (ScanDefaults)MemberwiseClone();
 }
