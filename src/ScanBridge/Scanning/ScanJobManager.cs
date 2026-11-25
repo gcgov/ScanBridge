@@ -58,9 +58,16 @@ public sealed class ScanJobManager : IDisposable
         // Don't let the job inherit the caller's execution context. An HTTP request sets
         // its own UI culture from Accept-Language; without this, the JobFinished handlers
         // (the tray) would run in the web page's language instead of the desktop's.
-        using (ExecutionContext.SuppressFlow())
+        if (ExecutionContext.IsFlowSuppressed())
         {
             _ = Task.Run(() => RunAsync(job, request));
+        }
+        else
+        {
+            using (ExecutionContext.SuppressFlow())
+            {
+                _ = Task.Run(() => RunAsync(job, request));
+            }
         }
 
         return job;

@@ -280,6 +280,12 @@ public sealed class TrayApplicationContext : ApplicationContext
     /// </summary>
     private void PostToUi(Action action)
     {
+        if (ExecutionContext.IsFlowSuppressed())
+        {
+            _syncContext.Post(_ => action(), null);
+            return;
+        }
+
         using (ExecutionContext.SuppressFlow())
         {
             _syncContext.Post(_ => action(), null);
