@@ -1,3 +1,6 @@
+using System.Globalization;
+using ScanBridge.Localization;
+using ScanBridge.Scanning;
 using ScanBridge.Settings;
 using Xunit;
 
@@ -7,13 +10,38 @@ public class SettingsStoreTests : IDisposable
 {
     private readonly string _tempDir = Path.Combine(Path.GetTempPath(), "ScanBridgeTests-" + Guid.NewGuid().ToString("N"));
 
-    [Fact]
-    public void DefaultPageSizeIsA4AndDefaultFormatIsPdf()
+    [Theory]
+    [InlineData("US", "letter")]
+    [InlineData("CA", "letter")]
+    [InlineData("MX", "letter")]
+    [InlineData("IT", "a4")]
+    [InlineData("GB", "a4")]
+    [InlineData("DE", "a4")]
+    public void DefaultPageSizeFollowsTheRegion(string region, string expected)
     {
-        var defaults = new AppSettings().Defaults;
+        Assert.Equal(expected, ScanDefaults.DefaultPageSizeFor(new RegionInfo(region)));
+    }
 
-        Assert.Equal("a4", defaults.PageSize);
-        Assert.Equal("pdf", defaults.Format);
+    [Fact]
+    public void NewSettingsFollowTheWindowsLanguage()
+    {
+        Assert.Equal(UiLanguage.Automatic, new AppSettings().Language);
+    }
+
+    [Fact]
+    public void SettingsFileWithoutNewKeysKeepsWorking()
+    {
+        // A settings file from version 1.0 has no "language" and no "jpegQuality".
+        Directory.CreateDirectory(_tempDir);
+        File.WriteAllText(Path.Combine(_tempDir, "settings.json"),
+            """{ "port": 7300, "defaults": { "pageSize": "legal" } }""");
+
+        var loaded = new SettingsStore(_tempDir).Load();
+
+        Assert.Equal(7300, loaded.Port);
+        Assert.Equal("legal", loaded.Defaults.PageSize);
+        Assert.Equal(UiLanguage.Automatic, loaded.Language);
+        Assert.Equal(ScanFormats.DefaultJpegQuality, loaded.Defaults.JpegQuality);
     }
 
     [Fact]
@@ -44,7 +72,7 @@ public class SettingsStoreTests : IDisposable
         };
         settings.Defaults.Dpi = 200;
         settings.Defaults.PaperSource = "duplex";
-        settings.Defaults.Format = "jpg";
+        settings.Language = "it";
         store.Save(settings);
 
         var reloaded = new SettingsStore(_tempDir).Load();
@@ -55,7 +83,7 @@ public class SettingsStoreTests : IDisposable
         Assert.Equal("Test Scanner", reloaded.ScannerDeviceName);
         Assert.Equal(200, reloaded.Defaults.Dpi);
         Assert.Equal("duplex", reloaded.Defaults.PaperSource);
-        Assert.Equal("jpg", reloaded.Defaults.Format);
+        Assert.Equal("it", reloaded.Language);
         Assert.False(reloaded.RunAtLogin);
     }
 

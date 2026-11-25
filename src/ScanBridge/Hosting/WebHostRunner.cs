@@ -1,10 +1,13 @@
+using System.Globalization;
 using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Localization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ScanBridge.Api;
+using ScanBridge.Localization;
 using ScanBridge.Scanning;
 using ScanBridge.Settings;
 using Serilog;
@@ -36,7 +39,8 @@ public sealed class WebHostRunner : IAsyncDisposable
 
     public bool IsRunning { get; private set; }
 
-    public string? LastError { get; private set; }
+    /// <summary>Why the listener is not running, or null. Render it in the reader's language.</summary>
+    public LocalizedMessage? LastError { get; private set; }
 
     /// <summary>Raised on start/stop/failure so the tray and settings window can show listener state.</summary>
     public event Action? StatusChanged;
@@ -60,13 +64,14 @@ public sealed class WebHostRunner : IAsyncDisposable
                 builder.Services.AddCors(options => options.AddPolicy(CorsPolicyName, policy => policy
                     .WithOrigins(settings.AllowedOrigins.ToArray())
                     .WithMethods("GET", "POST", "DELETE")
-                    .WithHeaders(RequestGuards.RequiredHeaderName, "Content-Type")));
+                    .AllowAnyHeader()));
                 builder.WebHost.ConfigureKestrel(kestrel => kestrel.Listen(IPAddress.Loopback, settings.Port));
 
                 var app = builder.Build();
+                app.UseRequestLocalization(ConfigureRequestLocalization);
                 app.UseHostValidation(settings.Port);
                 app.UseCors(CorsPolicyName);
-                app.UseRequiredHeader();
+                app.UseOriginCheck(settings.AllowedOrigins.ToArray());
                 ApiEndpoints.Map(app, _settingsStore, _scannerService, _jobManager);
 
                 await app.StartAsync().ConfigureAwait(false);
@@ -79,8 +84,8 @@ public sealed class WebHostRunner : IAsyncDisposable
             {
                 IsRunning = false;
                 LastError = ex is IOException
-                    ? $"Impossibile mettersi in ascolto sulla porta {settings.Port}: potrebbe essere usata da un altro programma."
-                    : ex.Message;
+                    ? new LocalizedMessage(nameof(Strings.ServerPortInUse), settings.Port)
+                    : new LocalizedMessage(nameof(Strings.ServerStartFailed), ex.Message);
                 _logger.Error(ex, "Failed to start the ScanBridge API on port {Port}", settings.Port);
             }
         }
@@ -89,6 +94,23 @@ public sealed class WebHostRunner : IAsyncDisposable
             _lifecycleLock.Release();
             StatusChanged?.Invoke();
         }
+    }
+
+    /// <summary>
+    /// Error messages follow the request's Accept-Language header, so a web page gets them
+    /// in its user's language. English is the default, not the desktop language: a caller
+    /// that sends no Accept-Language gets the same text as before translations existed.
+    /// </summary>
+    private static void ConfigureRequestLocalization(RequestLocalizationOptions options)
+    {
+        var cultures = UiLanguage.Supported.Select(l => CultureInfo.GetCultureInfo(l.Name)).ToList();
+        options.DefaultRequestCulture = new RequestCulture(UiLanguage.English);
+        options.SupportedCultures = cultures;
+        options.SupportedUICultures = cultures;
+        options.FallBackToParentCultures = true;
+        options.FallBackToParentUICultures = true;
+        options.ApplyCurrentCultureToResponseHeaders = true;
+        options.RequestCultureProviders = [new AcceptLanguageHeaderRequestCultureProvider()];
     }
 
     public async Task StopAsync()

@@ -21,6 +21,7 @@ public sealed class ApiServerTests : IAsyncLifetime
     private const string OtherOrigin = "https://evil.example.com";
 
     private static readonly byte[] FakeJpeg = [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10];
+    private static readonly byte[] FakeJpeg2 = [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x20];
     private static readonly byte[] FakePdf = Encoding.ASCII.GetBytes("%PDF-1.4 fake");
 
     private readonly string _tempDir = Path.Combine(Path.GetTempPath(), "ScanBridgeApiTests-" + Guid.NewGuid().ToString("N"));
@@ -52,12 +53,15 @@ public sealed class ApiServerTests : IAsyncLifetime
         _jobManager = new ScanJobManager((request, _, _) =>
         {
             _lastRequest = request;
-            return Task.FromResult(request.Format == ScanFormats.Jpg ? FakeJpeg : FakePdf);
+            // A two-page scan: as one PDF, or as one JPEG per page.
+            return Task.FromResult(request.Format == ScanFormats.Jpg
+                ? new ScanOutput(ScanFormats.Jpg, [FakeJpeg, FakeJpeg2])
+                : ScanOutput.Pdf(FakePdf));
         });
         _runner = new WebHostRunner(_settingsStore, _scannerService, _jobManager, new LoggerConfiguration().CreateLogger());
 
         await _runner.StartAsync();
-        Assert.True(_runner.IsRunning, _runner.LastError);
+        Assert.True(_runner.IsRunning, _runner.LastError?.ToString());
     }
 
     public async Task DisposeAsync()
@@ -81,12 +85,12 @@ public sealed class ApiServerTests : IAsyncLifetime
         return port;
     }
 
-    private HttpRequestMessage Request(HttpMethod method, string path, string? body = null, bool withHeader = true, string? origin = null)
+    private HttpRequestMessage Request(HttpMethod method, string path, string? body = null, string? origin = null, string? language = null)
     {
         var request = new HttpRequestMessage(method, BaseUrl + path);
-        if (withHeader)
+        if (language is not null)
         {
-            request.Headers.Add("X-ScanBridge", "1");
+            request.Headers.Add("Accept-Language", language);
         }
 
         if (origin is not null)
@@ -126,20 +130,56 @@ public sealed class ApiServerTests : IAsyncLifetime
         }
     }
 
-    // ---- Mandatory X-ScanBridge header ----
+    // ---- Origin check on POST/DELETE (no custom header needed) ----
 
     [Fact]
-    public async Task PostWithoutHeaderIsRejected()
+    public async Task PostWithoutOriginIsAccepted()
     {
-        var response = await _http.SendAsync(Request(HttpMethod.Post, "/scans", "{}", withHeader: false));
+        // Same-machine tools (curl, desktop apps) send no Origin header.
+        var response = await _http.SendAsync(Request(HttpMethod.Post, "/scans", "{}"));
 
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
     }
 
     [Fact]
-    public async Task PostWithoutHeaderDoesNotStartAScan()
+    public async Task PostFromAllowedOriginIsAccepted()
     {
-        await _http.SendAsync(Request(HttpMethod.Post, "/scans", "{}", withHeader: false));
+        var response = await _http.SendAsync(Request(HttpMethod.Post, "/scans", "{}", origin: AllowedOrigin));
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostFromAllowedOriginWithTheOldCustomHeaderIsAccepted()
+    {
+        // Clients written against an earlier draft send X-ScanBridge; it must keep working.
+        var request = Request(HttpMethod.Post, "/scans", "{}", origin: AllowedOrigin);
+        request.Headers.Add("X-ScanBridge", "1");
+
+        var response = await _http.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostFromUnauthorizedOriginIsRejected()
+    {
+        var response = await _http.SendAsync(Request(HttpMethod.Post, "/scans", "{}", origin: OtherOrigin));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Contains("originNotAllowed", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task SimplePostFromUnauthorizedOriginDoesNotStartAScan()
+    {
+        // A "simple" request (text/plain, no preflight) is what CORS alone cannot stop.
+        var request = new HttpRequestMessage(HttpMethod.Post, BaseUrl + "/scans")
+        {
+            Content = new StringContent("{}", Encoding.UTF8, "text/plain"),
+        };
+        request.Headers.Add("Origin", OtherOrigin);
+        await _http.SendAsync(request);
 
         // The scanner must still be free: a legitimate request right after is accepted, not 409.
         var jobId = await StartScanAsync("{}");
@@ -147,35 +187,19 @@ public sealed class ApiServerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task PostWithHeaderIsAccepted()
+    public async Task DeleteFromUnauthorizedOriginIsRejected()
     {
-        var response = await _http.SendAsync(Request(HttpMethod.Post, "/scans", "{}"));
-
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task DeleteWithoutHeaderIsRejected()
-    {
-        var response = await _http.SendAsync(Request(HttpMethod.Delete, "/scans/anything", withHeader: false));
+        var response = await _http.SendAsync(Request(HttpMethod.Delete, "/scans/anything", origin: OtherOrigin));
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
-    public async Task DeleteWithHeaderIsAccepted()
+    public async Task DeleteWithoutOriginIsAccepted()
     {
         var response = await _http.SendAsync(Request(HttpMethod.Delete, "/scans/anything"));
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task GetDoesNotNeedTheHeader()
-    {
-        var response = await _http.SendAsync(Request(HttpMethod.Get, "/status", withHeader: false));
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     // ---- Host validation (DNS rebinding) ----
@@ -188,7 +212,7 @@ public sealed class ApiServerTests : IAsyncLifetime
     [InlineData("127.0.0.1:1")]
     public async Task InvalidHostIsRejected(string host)
     {
-        var request = Request(HttpMethod.Get, "/status", withHeader: false);
+        var request = Request(HttpMethod.Get, "/status");
         request.Headers.Host = host;
 
         var response = await _http.SendAsync(request);
@@ -199,7 +223,7 @@ public sealed class ApiServerTests : IAsyncLifetime
     [Fact]
     public async Task LocalhostHostWithPortIsAccepted()
     {
-        var request = Request(HttpMethod.Get, "/status", withHeader: false);
+        var request = Request(HttpMethod.Get, "/status");
         request.Headers.Host = $"localhost:{_port}";
 
         var response = await _http.SendAsync(request);
@@ -212,7 +236,7 @@ public sealed class ApiServerTests : IAsyncLifetime
     [Fact]
     public async Task AllowedOriginGetsCorsHeader()
     {
-        var response = await _http.SendAsync(Request(HttpMethod.Get, "/status", withHeader: false, origin: AllowedOrigin));
+        var response = await _http.SendAsync(Request(HttpMethod.Get, "/status", origin: AllowedOrigin));
 
         Assert.Equal(AllowedOrigin, Assert.Single(response.Headers.GetValues("Access-Control-Allow-Origin")));
     }
@@ -220,7 +244,7 @@ public sealed class ApiServerTests : IAsyncLifetime
     [Fact]
     public async Task UnauthorizedOriginGetsNoCorsHeader()
     {
-        var response = await _http.SendAsync(Request(HttpMethod.Get, "/status", withHeader: false, origin: OtherOrigin));
+        var response = await _http.SendAsync(Request(HttpMethod.Get, "/status", origin: OtherOrigin));
 
         Assert.False(response.Headers.Contains("Access-Control-Allow-Origin"));
     }
@@ -228,7 +252,7 @@ public sealed class ApiServerTests : IAsyncLifetime
     [Fact]
     public async Task PreflightFromAllowedOriginAllowsTheCustomHeader()
     {
-        var request = Request(HttpMethod.Options, "/scans", withHeader: false, origin: AllowedOrigin);
+        var request = Request(HttpMethod.Options, "/scans", origin: AllowedOrigin);
         request.Headers.Add("Access-Control-Request-Method", "POST");
         request.Headers.Add("Access-Control-Request-Headers", "x-scanbridge,content-type");
 
@@ -238,12 +262,13 @@ public sealed class ApiServerTests : IAsyncLifetime
         Assert.Equal(AllowedOrigin, Assert.Single(response.Headers.GetValues("Access-Control-Allow-Origin")));
         var allowedHeaders = string.Join(",", response.Headers.GetValues("Access-Control-Allow-Headers"));
         Assert.Contains("x-scanbridge", allowedHeaders, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("content-type", allowedHeaders, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public async Task PreflightFromUnauthorizedOriginIsNotAllowed()
     {
-        var request = Request(HttpMethod.Options, "/scans", withHeader: false, origin: OtherOrigin);
+        var request = Request(HttpMethod.Options, "/scans", origin: OtherOrigin);
         request.Headers.Add("Access-Control-Request-Method", "POST");
         request.Headers.Add("Access-Control-Request-Headers", "x-scanbridge,content-type");
 
@@ -282,31 +307,63 @@ public sealed class ApiServerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task SettingsFormatIsUsedWhenTheRequestOmitsIt()
+    public async Task OmittedFormatIsAlwaysPdf()
     {
-        var settings = _settingsStore.Current.Clone();
-        settings.Defaults.Format = "jpg";
-        _settingsStore.Save(settings);
+        // A page written before JPG support never sends "format" and must get a PDF.
+        await WaitUntilCompletedAsync(await StartScanAsync("""{"dpi":200}"""));
 
-        var jobId = await StartScanAsync("{}");
-        await WaitUntilCompletedAsync(jobId);
+        Assert.Equal(ScanFormats.Pdf, _lastRequest!.Format);
+    }
 
-        var response = await _http.GetAsync($"{BaseUrl}/scans/{jobId}/document");
-        Assert.Equal("image/jpeg", response.Content.Headers.ContentType?.MediaType);
+    [Theory]
+    [InlineData("JPG")]
+    [InlineData("jpeg")]
+    [InlineData(" Jpeg ")]
+    public async Task JpegSpellingsAreAccepted(string format)
+    {
+        await WaitUntilCompletedAsync(await StartScanAsync($$"""{"format":"{{format}}"}"""));
+
+        Assert.Equal(ScanFormats.Jpg, _lastRequest!.Format);
     }
 
     [Fact]
-    public async Task RequestFormatOverridesTheSettings()
+    public async Task JobReportsFormatAndFileCount()
     {
-        var settings = _settingsStore.Current.Clone();
-        settings.Defaults.Format = "jpg";
-        _settingsStore.Save(settings);
-
-        var jobId = await StartScanAsync("""{"format":"pdf"}""");
+        var jobId = await StartScanAsync("""{"format":"jpg"}""");
         await WaitUntilCompletedAsync(jobId);
 
-        var response = await _http.GetAsync($"{BaseUrl}/scans/{jobId}/document");
-        Assert.Equal("application/pdf", response.Content.Headers.ContentType?.MediaType);
+        using var json = JsonDocument.Parse(await _http.GetStringAsync($"{BaseUrl}/scans/{jobId}"));
+        Assert.Equal("jpg", json.RootElement.GetProperty("format").GetString());
+        Assert.Equal(2, json.RootElement.GetProperty("fileCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task EveryJpgPageCanBeDownloaded()
+    {
+        var jobId = await StartScanAsync("""{"format":"jpg"}""");
+        await WaitUntilCompletedAsync(jobId);
+
+        var first = await _http.GetAsync($"{BaseUrl}/scans/{jobId}/document?page=1");
+        var second = await _http.GetAsync($"{BaseUrl}/scans/{jobId}/document?page=2");
+
+        Assert.Equal(FakeJpeg, await first.Content.ReadAsByteArrayAsync());
+        Assert.Equal(FakeJpeg2, await second.Content.ReadAsByteArrayAsync());
+        Assert.Equal("scan-2.jpg", second.Content.Headers.ContentDisposition?.FileName);
+    }
+
+    [Theory]
+    [InlineData("""{"format":"jpg"}""", 3)]
+    [InlineData("""{"format":"jpg"}""", 0)]
+    [InlineData("{}", 2)]
+    public async Task PageOutOfRangeIsNotFound(string body, int page)
+    {
+        var jobId = await StartScanAsync(body);
+        await WaitUntilCompletedAsync(jobId);
+
+        var response = await _http.GetAsync($"{BaseUrl}/scans/{jobId}/document?page={page}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Contains("pageNotFound", await response.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -330,6 +387,18 @@ public sealed class ApiServerTests : IAsyncLifetime
         await WaitUntilCompletedAsync(await StartScanAsync("""{"format":"jpg"}"""));
 
         Assert.Equal(60, _lastRequest!.JpegQuality);
+    }
+
+    [Fact]
+    public async Task InvalidJpegQualityInTheSettingsDoesNotBreakScans()
+    {
+        var settings = _settingsStore.Current.Clone();
+        settings.Defaults.JpegQuality = 0;
+        _settingsStore.Save(settings);
+
+        await WaitUntilCompletedAsync(await StartScanAsync("""{"format":"jpg"}"""));
+
+        Assert.Equal(ScanFormats.DefaultJpegQuality, _lastRequest!.JpegQuality);
     }
 
     [Fact]
@@ -376,5 +445,38 @@ public sealed class ApiServerTests : IAsyncLifetime
 
         var second = await _http.GetAsync($"{BaseUrl}/scans/{jobId}/document");
         Assert.Equal(HttpStatusCode.NotFound, second.StatusCode);
+    }
+
+    // ---- Error message language ----
+
+    [Fact]
+    public async Task ErrorMessageIsEnglishWithoutAcceptLanguage()
+    {
+        var response = await _http.GetAsync($"{BaseUrl}/scans/unknown");
+
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var error = json.RootElement.GetProperty("error");
+        Assert.Equal("notFound", error.GetProperty("code").GetString());
+        Assert.Equal("Unknown scan job.", error.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task ErrorMessageFollowsAcceptLanguage()
+    {
+        var response = await _http.SendAsync(Request(HttpMethod.Get, "/scans/unknown", language: "it-IT,it;q=0.9,en;q=0.8"));
+
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var error = json.RootElement.GetProperty("error");
+        Assert.Equal("notFound", error.GetProperty("code").GetString());
+        Assert.Equal("Scansione sconosciuta.", error.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task UnsupportedAcceptLanguageFallsBackToEnglish()
+    {
+        var response = await _http.SendAsync(Request(HttpMethod.Get, "/scans/unknown", language: "de-DE"));
+
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("Unknown scan job.", json.RootElement.GetProperty("error").GetProperty("message").GetString());
     }
 }

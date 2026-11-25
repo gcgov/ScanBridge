@@ -8,7 +8,11 @@
     <AssemblyName>ScanBridge</AssemblyName>
     <ApplicationIcon>Resources\scanbridge.ico</ApplicationIcon>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- English is built into ScanBridge.dll; every other language in Localization/Strings.*.resx
+         ships as a satellite assembly (for example it/ScanBridge.resources.dll). This list also
+         keeps the matching translations of NAPS2 and the .NET libraries, and drops the rest. -->
+    <NeutralLanguage>en</NeutralLanguage>
+    <SatelliteResourceLanguages>en;it</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>

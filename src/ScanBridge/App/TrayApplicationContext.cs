@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using ScanBridge.Hosting;
+using ScanBridge.Localization;
 using ScanBridge.Scanning;
 using ScanBridge.Settings;
 using Serilog;
@@ -9,6 +10,12 @@ namespace ScanBridge.App;
 /// <summary>
 /// The tray icon and its menu. ScanBridge has no main window — the tray icon is the app.
 /// </summary>
+/// <remarks>
+/// Every text is built on the UI thread, in the desktop language. Events from scan jobs
+/// and from the web host arrive on other threads, so the handlers go through
+/// <see cref="PostToUi"/>, which also drops the caller's culture (a web request can carry
+/// another language in its Accept-Language header).
+/// </remarks>
 public sealed class TrayApplicationContext : ApplicationContext
 {
     private readonly SettingsStore _settingsStore;
@@ -20,6 +27,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly SynchronizationContext _syncContext;
     private SettingsForm? _settingsForm;
     private bool _testScanRunning;
+    private string _language;
 
     public TrayApplicationContext(
         SettingsStore settingsStore,
@@ -33,21 +41,13 @@ public sealed class TrayApplicationContext : ApplicationContext
         _jobManager = jobManager;
         _webHostRunner = webHostRunner;
         _syncContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
-
-        var menu = new ContextMenuStrip();
-        menu.Items.Add(_statusItem);
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Impostazioni…", null, (_, _) => ShowSettings());
-        menu.Items.Add("Scansione di prova", null, (_, _) => RunTestScan());
-        menu.Items.Add("Apri cartella dei log", null, (_, _) => LogFolder.Open());
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Esci", null, (_, _) => ExitApplication());
+        _language = settingsStore.Current.Language;
 
         _notifyIcon = new NotifyIcon
         {
             Icon = LoadIcon(),
             Text = "ScanBridge",
-            ContextMenuStrip = menu,
+            ContextMenuStrip = BuildMenu(),
             Visible = true,
         };
         _notifyIcon.DoubleClick += (_, _) => ShowSettings();
@@ -55,18 +55,32 @@ public sealed class TrayApplicationContext : ApplicationContext
         _jobManager.JobStarted += OnJobStarted;
         _jobManager.JobFinished += OnJobFinished;
         _webHostRunner.StatusChanged += OnListenerStatusChanged;
+        _settingsStore.Changed += OnSettingsChanged;
         UpdateStatus();
 
         if (_webHostRunner.LastError is { } startupError)
         {
-            ShowBalloon("ScanBridge", startupError, ToolTipIcon.Warning);
+            ShowBalloon("ScanBridge", startupError.ToString(), ToolTipIcon.Warning);
         }
 
         if (openSettingsOnStartup)
         {
             // Let the message loop start before opening the window.
-            _syncContext.Post(_ => ShowSettings(), null);
+            PostToUi(ShowSettings);
         }
+    }
+
+    private ContextMenuStrip BuildMenu()
+    {
+        var menu = new ContextMenuStrip();
+        menu.Items.Add(_statusItem);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(Strings.TrayMenuSettings, null, (_, _) => ShowSettings());
+        menu.Items.Add(Strings.TrayMenuTestScan, null, (_, _) => RunTestScan());
+        menu.Items.Add(Strings.OpenLogFolder, null, (_, _) => LogFolder.Open());
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(Strings.TrayMenuExit, null, (_, _) => ExitApplication());
+        return menu;
     }
 
     private static Icon LoadIcon()
@@ -132,11 +146,12 @@ public sealed class TrayApplicationContext : ApplicationContext
         var settings = _settingsStore.Current;
         if (string.IsNullOrEmpty(settings.ScannerDeviceId))
         {
-            ShowBalloon("ScanBridge", "Nessuno scanner configurato: apri prima le Impostazioni.", ToolTipIcon.Warning);
+            ShowBalloon("ScanBridge", Strings.TrayNoScannerConfigured, ToolTipIcon.Warning);
             ShowSettings();
             return;
         }
 
+        // The test scan proves the path a web app uses with no options: a PDF.
         var defaults = settings.Defaults;
         var request = new ScanRequest(
             DeviceId: settings.ScannerDeviceId,
@@ -147,30 +162,27 @@ public sealed class TrayApplicationContext : ApplicationContext
             ColorMode: defaults.ColorMode,
             PageSize: defaults.PageSize,
             ExcludeBlankPages: defaults.ExcludeBlankPages,
-            AutoDeskew: defaults.AutoDeskew,
-            Format: ScanFormats.TryNormalize(defaults.Format, out var format) ? format : ScanFormats.Pdf,
-            JpegQuality: ScanFormats.IsValidJpegQuality(defaults.JpegQuality) ? defaults.JpegQuality : ScanFormats.DefaultJpegQuality);
+            AutoDeskew: defaults.AutoDeskew);
 
-        var job = _jobManager.TryStart(request, out var errorCode);
+        var job = _jobManager.TryStart(request, out _);
         if (job is null)
         {
-            ShowBalloon("ScanBridge", "Una scansione è già in corso.", ToolTipIcon.Warning);
+            ShowBalloon("ScanBridge", Strings.ScanScannerBusy, ToolTipIcon.Warning);
             return;
         }
 
         _testScanRunning = true;
         try
         {
-            ShowBalloon("ScanBridge", "Scansione di prova in corso…", ToolTipIcon.Info);
+            ShowBalloon("ScanBridge", Strings.TrayTestScanStarted, ToolTipIcon.Info);
             while (!job.IsTerminal)
             {
                 await Task.Delay(500);
             }
 
-            if (job.Status == ScanJobStatus.Completed && job.ContentBytes is { } pdfBytes)
+            if (job.Status == ScanJobStatus.Completed && job.Files is [var pdfBytes, ..])
             {
-                var extension = Path.GetExtension(ScanFormats.FileNameForContentType(job.ContentType));
-                var pdfPath = Path.Combine(Path.GetTempPath(), $"scanbridge-test-{job.Id}{extension}");
+                var pdfPath = Path.Combine(Path.GetTempPath(), $"scanbridge-test-{job.Id}.pdf");
                 await File.WriteAllBytesAsync(pdfPath, pdfBytes);
                 Process.Start(new ProcessStartInfo(pdfPath) { UseShellExecute = true });
 
@@ -184,7 +196,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         catch (Exception ex)
         {
             Log.Error(ex, "Test scan failed");
-            ShowBalloon("ScanBridge", $"Scansione di prova non riuscita: {ex.Message}", ToolTipIcon.Error);
+            ShowBalloon("ScanBridge", Strings.TrayTestScanFailed(ex.Message), ToolTipIcon.Error);
         }
         finally
         {
@@ -195,61 +207,83 @@ public sealed class TrayApplicationContext : ApplicationContext
 
     private void OnJobStarted(ScanJob job) => UpdateStatus();
 
-    private void OnJobFinished(ScanJob job)
+    private void OnJobFinished(ScanJob job) => PostToUi(() =>
     {
         switch (job.Status)
         {
             case ScanJobStatus.Completed:
-                ShowBalloon("ScanBridge", "Scansione completata.", ToolTipIcon.Info);
+                ShowBalloon("ScanBridge", Strings.TrayScanCompleted, ToolTipIcon.Info);
                 break;
             case ScanJobStatus.Failed:
-                ShowBalloon("ScanBridge — scansione non riuscita", job.ErrorMessage ?? "La scansione non è riuscita.", ToolTipIcon.Error);
+                ShowBalloon(Strings.TrayScanFailedTitle, job.ErrorMessage?.ToString() ?? string.Empty, ToolTipIcon.Error);
                 break;
         }
 
         UpdateStatus();
-    }
+    });
 
-    private void OnListenerStatusChanged()
+    private void OnListenerStatusChanged() => PostToUi(() =>
     {
         if (_webHostRunner.LastError is { } error)
         {
-            ShowBalloon("ScanBridge", error, ToolTipIcon.Warning);
+            ShowBalloon("ScanBridge", error.ToString(), ToolTipIcon.Warning);
         }
 
         UpdateStatus();
-    }
+    });
+
+    /// <summary>Rebuilds the menu when the language changes. The settings window applies it the next time it opens.</summary>
+    private void OnSettingsChanged(AppSettings settings) => PostToUi(() =>
+    {
+        if (settings.Language == _language)
+        {
+            return;
+        }
+
+        _language = settings.Language;
+        var oldMenu = _notifyIcon.ContextMenuStrip;
+        oldMenu?.Items.Remove(_statusItem);
+        _notifyIcon.ContextMenuStrip = BuildMenu();
+        oldMenu?.Dispose();
+        UpdateStatus();
+    });
 
     /// <summary>Refreshes the tooltip on the tray icon and the status line at the top of the menu.</summary>
-    private void UpdateStatus()
+    private void UpdateStatus() => PostToUi(() =>
     {
-        _syncContext.Post(_ =>
+        string state;
+        if (!_webHostRunner.IsRunning)
         {
-            string state;
-            if (!_webHostRunner.IsRunning)
-            {
-                state = _webHostRunner.LastError is null ? "Non in ascolto" : "Errore: server non avviato";
-            }
-            else if (_jobManager.ActiveJob is not null)
-            {
-                state = "Scansione in corso…";
-            }
-            else
-            {
-                state = $"Pronto · porta {_settingsStore.Current.Port}";
-            }
+            state = _webHostRunner.LastError is null ? Strings.NotListening : Strings.TrayStatusServerError;
+        }
+        else if (_jobManager.ActiveJob is not null)
+        {
+            state = Strings.TrayStatusScanning;
+        }
+        else
+        {
+            state = Strings.TrayStatusReady(_settingsStore.Current.Port);
+        }
 
-            var text = $"ScanBridge v{AppInfo.Version} · {state}";
-            _statusItem.Text = text;
-            // NotifyIcon.Text is limited to 127 characters.
-            _notifyIcon.Text = text.Length <= 127 ? text : text[..127];
-        }, null);
-    }
+        var text = Strings.TrayStatusLine(AppInfo.Version, state);
+        _statusItem.Text = text;
+        // NotifyIcon.Text is limited to 127 characters.
+        _notifyIcon.Text = text.Length <= 127 ? text : text[..127];
+    });
 
-    private void ShowBalloon(string title, string message, ToolTipIcon icon)
+    private void ShowBalloon(string title, string message, ToolTipIcon icon) =>
+        PostToUi(() => _notifyIcon.ShowBalloonTip(5000, title, message, icon));
+
+    /// <summary>
+    /// Runs <paramref name="action"/> on the UI thread, in the UI thread's own execution
+    /// context. Suppressing the flow keeps the culture of a web request out of the tray.
+    /// </summary>
+    private void PostToUi(Action action)
     {
-        // Events can fire on worker threads; NotifyIcon belongs to the UI thread.
-        _syncContext.Post(_ => _notifyIcon.ShowBalloonTip(5000, title, message, icon), null);
+        using (ExecutionContext.SuppressFlow())
+        {
+            _syncContext.Post(_ => action(), null);
+        }
     }
 
     private void ExitApplication()
@@ -265,6 +299,7 @@ public sealed class TrayApplicationContext : ApplicationContext
             _jobManager.JobStarted -= OnJobStarted;
             _jobManager.JobFinished -= OnJobFinished;
             _webHostRunner.StatusChanged -= OnListenerStatusChanged;
+            _settingsStore.Changed -= OnSettingsChanged;
             _notifyIcon.Dispose();
         }
 

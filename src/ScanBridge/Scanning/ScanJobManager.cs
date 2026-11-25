@@ -1,9 +1,10 @@
 using System.Collections.Concurrent;
+using ScanBridge.Localization;
 
 namespace ScanBridge.Scanning;
 
 /// <summary>Executes a scan for a job; injected so the manager is testable without hardware.</summary>
-public delegate Task<byte[]> ScanExecutor(ScanRequest request, IProgress<int> pageProgress, CancellationToken cancellationToken);
+public delegate Task<ScanOutput> ScanExecutor(ScanRequest request, IProgress<int> pageProgress, CancellationToken cancellationToken);
 
 /// <summary>
 /// In-memory scan job registry. A physical scanner is exclusive, so at most one job
@@ -53,7 +54,15 @@ public sealed class ScanJobManager : IDisposable
 
         errorCode = null;
         JobStarted?.Invoke(job);
-        _ = RunAsync(job, request);
+
+        // Don't let the job inherit the caller's execution context. An HTTP request sets
+        // its own UI culture from Accept-Language; without this, the JobFinished handlers
+        // (the tray) would run in the web page's language instead of the desktop's.
+        using (ExecutionContext.SuppressFlow())
+        {
+            _ = Task.Run(() => RunAsync(job, request));
+        }
+
         return job;
     }
 
@@ -91,28 +100,28 @@ public sealed class ScanJobManager : IDisposable
         try
         {
             job.Status = ScanJobStatus.Scanning;
-            var content = await _executor(request, progress, job.Cts.Token).ConfigureAwait(false);
-            job.ContentBytes = content;
-            job.ContentType = ScanFormats.ContentTypeFor(request.Format);
+            var output = await _executor(request, progress, job.Cts.Token).ConfigureAwait(false);
+            job.Format = output.Format;
+            job.Files = output.Files;
             job.Status = ScanJobStatus.Completed;
         }
         catch (OperationCanceledException)
         {
             job.Status = ScanJobStatus.Canceled;
             job.ErrorCode = ScanErrorCodes.Canceled;
-            job.ErrorMessage = "La scansione è stata annullata.";
+            job.ErrorMessage = new LocalizedMessage(nameof(Strings.ScanCanceled));
         }
         catch (ScanBridgeException ex)
         {
             job.Status = ScanJobStatus.Failed;
             job.ErrorCode = ex.Code;
-            job.ErrorMessage = ex.Message;
+            job.ErrorMessage = ex.Text;
         }
         catch (Exception ex)
         {
             job.Status = ScanJobStatus.Failed;
             job.ErrorCode = ScanErrorCodes.ScanFailed;
-            job.ErrorMessage = ex.Message;
+            job.ErrorMessage = new LocalizedMessage(nameof(Strings.ScanFailed), ex.Message);
         }
         finally
         {

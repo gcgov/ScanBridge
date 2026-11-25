@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using ScanBridge.Localization;
 using ScanBridge.Scanning;
 using ScanBridge.Settings;
 
@@ -7,7 +8,9 @@ namespace ScanBridge.Api;
 
 /// <summary>
 /// Maps the localhost HTTP surface. All responses are camelCase JSON except the
-/// finished document, which is served as application/pdf or image/jpeg.
+/// finished document, which is served as application/pdf or image/jpeg. Error
+/// <c>message</c> texts are in the language of the request's Accept-Language header
+/// (English when ScanBridge has no translation for it); error <c>code</c> values never change.
 /// </summary>
 public static class ApiEndpoints
 {
@@ -40,24 +43,37 @@ public static class ApiEndpoints
             body ??= new StartScanRequest();
             var settings = settingsStore.Current;
 
-            if (!ScanFormats.TryNormalize(body.Format ?? settingsStore.Current.Defaults.Format, out var format))
+            // No format means PDF, whatever the settings say: a page written before JPG
+            // support always expects a PDF back.
+            if (!ScanFormats.TryNormalize(body.Format, out var format))
             {
-                return Error(StatusCodes.Status400BadRequest, "invalidFormat",
-                    "format deve essere \"pdf\" oppure \"jpg\".");
+                return Error(StatusCodes.Status400BadRequest, ApiErrorCodes.InvalidFormat, Strings.ApiInvalidFormat);
             }
 
-            var jpegQuality = body.JpegQuality ?? settings.Defaults.JpegQuality;
-            if (!ScanFormats.IsValidJpegQuality(jpegQuality))
+            // Reject a bad value from the caller, but never fail a scan over a bad value
+            // in a hand-edited settings file.
+            int jpegQuality;
+            if (body.JpegQuality is { } requestedQuality)
             {
-                return Error(StatusCodes.Status400BadRequest, "invalidJpegQuality",
-                    "jpegQuality deve essere compreso tra 1 e 100.");
+                if (!ScanFormats.IsValidJpegQuality(requestedQuality))
+                {
+                    return Error(StatusCodes.Status400BadRequest, ApiErrorCodes.InvalidJpegQuality, Strings.ApiInvalidJpegQuality);
+                }
+
+                jpegQuality = requestedQuality;
+            }
+            else
+            {
+                jpegQuality = ScanFormats.IsValidJpegQuality(settings.Defaults.JpegQuality)
+                    ? settings.Defaults.JpegQuality
+                    : ScanFormats.DefaultJpegQuality;
             }
 
             var deviceId = body.ScannerId ?? settings.ScannerDeviceId;
             if (string.IsNullOrEmpty(deviceId))
             {
                 return Error(StatusCodes.Status422UnprocessableEntity, ScanErrorCodes.NoScannerConfigured,
-                    "Nessuno scanner configurato. Apri le impostazioni di ScanBridge e seleziona uno scanner.");
+                    Strings.ScanNoScannerConfigured);
             }
 
             // A device id passed by the caller may not match the configured device; only
@@ -82,7 +98,7 @@ public static class ApiEndpoints
             if (job is null)
             {
                 return Error(StatusCodes.Status409Conflict, errorCode ?? ScanErrorCodes.ScannerBusy,
-                    "Una scansione è già in corso.");
+                    Strings.ScanScannerBusy);
             }
 
             return Results.Accepted($"/api/v1/scans/{job.Id}", new StartScanResponse(job.Id));
@@ -93,18 +109,18 @@ public static class ApiEndpoints
             var job = jobManager.Get(jobId);
             if (job is null)
             {
-                return Error(StatusCodes.Status404NotFound, "notFound", "Scansione sconosciuta.");
+                return Error(StatusCodes.Status404NotFound, ApiErrorCodes.NotFound, Strings.ApiScanNotFound);
             }
 
             return Results.Ok(ToResponse(job));
         });
 
-        api.MapGet("/scans/{jobId}/document", (string jobId, bool deleteAfterDownload = false) =>
+        api.MapGet("/scans/{jobId}/document", (string jobId, int page = 1, bool deleteAfterDownload = false) =>
         {
             var job = jobManager.Get(jobId);
             if (job is null)
             {
-                return Error(StatusCodes.Status404NotFound, "notFound", "Scansione sconosciuta.");
+                return Error(StatusCodes.Status404NotFound, ApiErrorCodes.NotFound, Strings.ApiScanNotFound);
             }
 
             if (job.Status != ScanJobStatus.Completed)
@@ -112,13 +128,21 @@ public static class ApiEndpoints
                 if (job.IsTerminal)
                 {
                     return Error(StatusCodes.Status410Gone, job.ErrorCode ?? ScanErrorCodes.ScanFailed,
-                        job.ErrorMessage ?? "La scansione non è stata completata.");
+                        job.ErrorMessage?.ToString() ?? Strings.ApiScanDidNotComplete);
                 }
 
-                return Error(StatusCodes.Status409Conflict, "notReady", "La scansione non è ancora terminata.");
+                return Error(StatusCodes.Status409Conflict, ApiErrorCodes.NotReady, Strings.ApiScanNotFinished);
             }
 
-            var content = job.ContentBytes!;
+            // A PDF holds every page in its single file. A JPG scan has one file per page.
+            var files = job.Files!;
+            if (page < 1 || page > files.Count)
+            {
+                return Error(StatusCodes.Status404NotFound, ApiErrorCodes.PageNotFound,
+                    Strings.ApiPageNotFound(page, files.Count));
+            }
+
+            var content = files[page - 1];
             if (deleteAfterDownload)
             {
                 // The response keeps its own reference to the bytes; this frees the job right away.
@@ -126,7 +150,7 @@ public static class ApiEndpoints
             }
 
             return Results.File(content, contentType: job.ContentType,
-                fileDownloadName: ScanFormats.FileNameForContentType(job.ContentType));
+                fileDownloadName: ScanFormats.FileNameFor(job.Format, page));
         });
 
         api.MapDelete("/scans/{jobId}", (string jobId) =>
@@ -149,7 +173,9 @@ public static class ApiEndpoints
             _ => "unknown",
         },
         PagesScanned: job.PagesScanned,
-        Error: job.ErrorCode is null ? null : new ApiErrorBody(job.ErrorCode, job.ErrorMessage ?? string.Empty));
+        Format: job.Format,
+        FileCount: job.Files?.Count ?? 0,
+        Error: job.ErrorCode is null ? null : new ApiErrorBody(job.ErrorCode, job.ErrorMessage?.ToString() ?? string.Empty));
 
     private static IResult Error(int statusCode, string code, string message) =>
         Results.Json(new ApiErrorResponse(new ApiErrorBody(code, message)), statusCode: statusCode);

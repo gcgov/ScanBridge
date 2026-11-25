@@ -1,3 +1,5 @@
+using System.Globalization;
+using ScanBridge.Localization;
 using ScanBridge.Scanning;
 
 namespace ScanBridge.Settings;
@@ -31,6 +33,12 @@ public sealed class AppSettings
 
     public bool RunAtLogin { get; set; } = true;
 
+    /// <summary>
+    /// Language of the tray and the settings window: "auto" (follow the Windows display
+    /// language) or a culture name from <see cref="UiLanguage.Supported"/>, such as "it".
+    /// </summary>
+    public string Language { get; set; } = UiLanguage.Automatic;
+
     public AppSettings Clone() => new()
     {
         Port = Port,
@@ -40,6 +48,7 @@ public sealed class AppSettings
         ScannerDeviceName = ScannerDeviceName,
         Defaults = Defaults.Clone(),
         RunAtLogin = RunAtLogin,
+        Language = Language,
     };
 
     /// <summary>
@@ -87,8 +96,11 @@ public sealed class ScanDefaults
     /// <summary>"color", "grayscale" or "blackAndWhite".</summary>
     public string ColorMode { get; set; } = "color";
 
-    /// <summary>"letter", "legal" or "a4".</summary>
-    public string PageSize { get; set; } = "a4";
+    /// <summary>
+    /// "letter", "legal" or "a4". A new install picks the paper size of the Windows region;
+    /// a saved settings file keeps its value.
+    /// </summary>
+    public string PageSize { get; set; } = DefaultPageSizeFor(RegionInfo.CurrentRegion);
 
     /// <summary>Drop pages the scanner returns that are (nearly) blank — useful for duplex.</summary>
     public bool ExcludeBlankPages { get; set; }
@@ -96,13 +108,21 @@ public sealed class ScanDefaults
     public bool AutoDeskew { get; set; }
 
     /// <summary>
-    /// Output format used when a request does not specify one: "pdf" or "jpg"
-    /// (jpg returns only the first scanned image).
+    /// JPEG quality, 1-100, for a request that asks for "jpg" without a "jpegQuality".
+    /// There is deliberately no default output format: a request without "format" always
+    /// gets a PDF, so a page written for the PDF-only API never receives a JPEG.
     /// </summary>
-    public string Format { get; set; } = "pdf";
-
-    /// <summary>JPEG quality, 1-100, used when the output format is jpg.</summary>
     public int JpegQuality { get; set; } = ScanFormats.DefaultJpegQuality;
 
     public ScanDefaults Clone() => (ScanDefaults)MemberwiseClone();
+
+    /// <summary>Regions where Letter, not A4, is the usual paper size.</summary>
+    private static readonly HashSet<string> LetterRegions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "US", "CA", "MX", "PR", "PH", "CL", "CO", "VE", "CR", "GT", "PA", "DO", "SV", "NI", "HN",
+    };
+
+    /// <summary>"letter" for North America and the other Letter regions, "a4" everywhere else.</summary>
+    public static string DefaultPageSizeFor(RegionInfo region) =>
+        LetterRegions.Contains(region.TwoLetterISORegionName) ? "letter" : "a4";
 }

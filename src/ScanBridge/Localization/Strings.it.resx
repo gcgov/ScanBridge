@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="NotListening" xml:space="preserve">
+    <value>Non in ascolto</value>
+  </data>
+  <data name="OpenLogFolder" xml:space="preserve">
+    <value>Apri cartella dei log</value>
+  </data>
+  <data name="TrayMenuSettings" xml:space="preserve">
+    <value>Impostazioni…</value>
+  </data>
+  <data name="TrayMenuTestScan" xml:space="preserve">
+    <value>Scansione di prova</value>
+  </data>
+  <data name="TrayMenuExit" xml:space="preserve">
+    <value>Esci</value>
+  </data>
+  <data name="TrayStatusServerError" xml:space="preserve">
+    <value>Errore: server non avviato</value>
+  </data>
+  <data name="TrayStatusScanning" xml:space="preserve">
+    <value>Scansione in corso…</value>
+  </data>
+  <data name="TrayStatusReady" xml:space="preserve">
+    <value>Pronto · porta {0}</value>
+  </data>
+  <data name="TrayStatusLine" xml:space="preserve">
+    <value>ScanBridge v{0} · {1}</value>
+  </data>
+  <data name="TrayNoScannerConfigured" xml:space="preserve">
+    <value>Nessuno scanner configurato: apri prima le Impostazioni.</value>
+  </data>
+  <data name="TrayTestScanStarted" xml:space="preserve">
+    <value>Scansione di prova in corso…</value>
+  </data>
+  <data name="TrayTestScanFailed" xml:space="preserve">
+    <value>Scansione di prova non riuscita: {0}</value>
+  </data>
+  <data name="TrayScanCompleted" xml:space="preserve">
+    <value>Scansione completata.</value>
+  </data>
+  <data name="TrayScanFailedTitle" xml:space="preserve">
+    <value>ScanBridge: scansione non riuscita</value>
+  </data>
+  <data name="SettingsTitle" xml:space="preserve">
+    <value>ScanBridge v{0} - Impostazioni</value>
+  </data>
+  <data name="SettingsScannerGroup" xml:space="preserve">
+    <value>Scanner</value>
+  </data>
+  <data name="SettingsDriverLabel" xml:space="preserve">
+    <value>Driver:</value>
+  </data>
+  <data name="SettingsScannerLabel" xml:space="preserve">
+    <value>Scanner:</value>
+  </data>
+  <data name="SettingsRefresh" xml:space="preserve">
+    <value>Aggiorna</value>
+  </data>
+  <data name="SettingsLookingForScanners" xml:space="preserve">
+    <value>Ricerca degli scanner in corso…</value>
+  </data>
+  <data name="SettingsNoScannersFound" xml:space="preserve">
+    <value>Nessuno scanner trovato con questo driver.</value>
+  </data>
+  <data name="SettingsScannersFound" xml:space="preserve">
+    <value>Scanner trovati: {0}.</value>
+  </data>
+  <data name="SettingsScannerListFailed" xml:space="preserve">
+    <value>Impossibile elencare gli scanner: {0}</value>
+  </data>
+  <data name="SettingsDefaultsGroup" xml:space="preserve">
+    <value>Impostazioni di scansione predefinite</value>
+  </data>
+  <data name="SettingsSourceLabel" xml:space="preserve">
+    <value>Origine:</value>
+  </data>
+  <data name="SettingsResolutionLabel" xml:space="preserve">
+    <value>Risoluzione:</value>
+  </data>
+  <data name="SettingsColorLabel" xml:space="preserve">
+    <value>Colore:</value>
+  </data>
+  <data name="SettingsPageSizeLabel" xml:space="preserve">
+    <value>Formato pagina:</value>
+  </data>
+  <data name="SourceFlatbed" xml:space="preserve">
+    <value>Piano di scansione</value>
+  </data>
+  <data name="SourceFeeder" xml:space="preserve">
+    <value>Caricatore documenti</value>
+  </data>
+  <data name="SourceDuplex" xml:space="preserve">
+    <value>Caricatore documenti (fronte/retro)</value>
+  </data>
+  <data name="ColorColor" xml:space="preserve">
+    <value>Colore</value>
+  </data>
+  <data name="ColorGrayscale" xml:space="preserve">
+    <value>Scala di grigi</value>
+  </data>
+  <data name="ColorBlackAndWhite" xml:space="preserve">
+    <value>Bianco e nero</value>
+  </data>
+  <data name="SettingsRemoveBlankPages" xml:space="preserve">
+    <value>Rimuovi le pagine bianche</value>
+  </data>
+  <data name="SettingsDeskew" xml:space="preserve">
+    <value>Raddrizza le pagine (deskew)</value>
+  </data>
+  <data name="SettingsJpegQualityLabel" xml:space="preserve">
+    <value>Qualità JPG (1-100):</value>
+  </data>
+  <data name="SettingsJpegQualityHelp" xml:space="preserve">
+    <value>Le scansioni sono file PDF. Un sito può chiedere immagini JPG con "format": "jpg". Questa qualità vale quando il sito non indica "jpegQuality".</value>
+  </data>
+  <data name="SettingsServerGroup" xml:space="preserve">
+    <value>Server locale</value>
+  </data>
+  <data name="SettingsPortLabel" xml:space="preserve">
+    <value>Porta:</value>
+  </data>
+  <data name="SettingsListening" xml:space="preserve">
+    <value>In ascolto su http://127.0.0.1:{0}</value>
+  </data>
+  <data name="SettingsOriginsLabel" xml:space="preserve">
+    <value>Siti autorizzati (solo questi siti possono usare lo scanner dal browser):</value>
+  </data>
+  <data name="SettingsAddOrigin" xml:space="preserve">
+    <value>Aggiungi</value>
+  </data>
+  <data name="SettingsRemoveOrigin" xml:space="preserve">
+    <value>Rimuovi selezionata</value>
+  </data>
+  <data name="SettingsInvalidOriginTitle" xml:space="preserve">
+    <value>Origine non valida</value>
+  </data>
+  <data name="SettingsInvalidOriginMessage" xml:space="preserve">
+    <value>Inserisci un'origine completa, ad esempio https://apps.example.gov: solo protocollo e dominio, senza percorso.</value>
+  </data>
+  <data name="SettingsRunAtLogin" xml:space="preserve">
+    <value>Avvia ScanBridge all'accesso a Windows</value>
+  </data>
+  <data name="SettingsLanguageLabel" xml:space="preserve">
+    <value>Lingua:</value>
+  </data>
+  <data name="SettingsLanguageAutomatic" xml:space="preserve">
+    <value>Automatica (lingua di Windows)</value>
+  </data>
+  <data name="SettingsCopyDiagnostics" xml:space="preserve">
+    <value>Copia diagnostica</value>
+  </data>
+  <data name="SettingsDiagnosticsCopied" xml:space="preserve">
+    <value>Diagnostica copiata negli appunti.</value>
+  </data>
+  <data name="SettingsClipboardUnavailable" xml:space="preserve">
+    <value>Impossibile accedere agli appunti. Riprova.</value>
+  </data>
+  <data name="SettingsSave" xml:space="preserve">
+    <value>Salva</value>
+  </data>
+  <data name="SettingsCancel" xml:space="preserve">
+    <value>Annulla</value>
+  </data>
+  <data name="ServerPortInUse" xml:space="preserve">
+    <value>Impossibile mettersi in ascolto sulla porta {0}: potrebbe essere usata da un altro programma.</value>
+  </data>
+  <data name="ServerStartFailed" xml:space="preserve">
+    <value>Impossibile avviare il server locale: {0}</value>
+  </data>
+  <data name="ApiInvalidHost" xml:space="preserve">
+    <value>L'intestazione Host deve essere 127.0.0.1 oppure localhost con la porta di ScanBridge.</value>
+  </data>
+  <data name="ApiOriginNotAllowed" xml:space="preserve">
+    <value>Il sito {0} non è autorizzato a usare ScanBridge. Aggiungilo nelle impostazioni di ScanBridge.</value>
+  </data>
+  <data name="ApiInvalidFormat" xml:space="preserve">
+    <value>format deve essere "pdf" oppure "jpg".</value>
+  </data>
+  <data name="ApiInvalidJpegQuality" xml:space="preserve">
+    <value>jpegQuality deve essere compreso tra 1 e 100.</value>
+  </data>
+  <data name="ApiScanNotFound" xml:space="preserve">
+    <value>Scansione sconosciuta.</value>
+  </data>
+  <data name="ApiScanNotFinished" xml:space="preserve">
+    <value>La scansione non è ancora terminata.</value>
+  </data>
+  <data name="ApiScanDidNotComplete" xml:space="preserve">
+    <value>La scansione non è stata completata.</value>
+  </data>
+  <data name="ApiPageNotFound" xml:space="preserve">
+    <value>La scansione non contiene la pagina {0}. Pagine disponibili: {1}.</value>
+  </data>
+  <data name="ScanNoScannerConfigured" xml:space="preserve">
+    <value>Nessuno scanner configurato. Apri le impostazioni di ScanBridge e seleziona uno scanner.</value>
+  </data>
+  <data name="ScanScannerBusy" xml:space="preserve">
+    <value>Una scansione è già in corso.</value>
+  </data>
+  <data name="ScanDeviceOffline" xml:space="preserve">
+    <value>Lo scanner non risponde. Controlla che sia acceso e collegato. ({0})</value>
+  </data>
+  <data name="ScanNoPages" xml:space="preserve">
+    <value>Nessuna pagina scansionata. Controlla che il documento sia inserito nello scanner.</value>
+  </data>
+  <data name="ScanCanceled" xml:space="preserve">
+    <value>La scansione è stata annullata.</value>
+  </data>
+  <data name="ScanFailed" xml:space="preserve">
+    <value>La scansione non è riuscita: {0}</value>
+  </data>
+</root>

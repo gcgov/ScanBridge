@@ -4,6 +4,7 @@ using NAPS2.Images.Gdi;
 using NAPS2.Pdf;
 using NAPS2.Scan;
 using NAPS2.Scan.Exceptions;
+using ScanBridge.Localization;
 
 namespace ScanBridge.Scanning;
 
@@ -12,7 +13,7 @@ public sealed record ScannerInfo(string Id, string Name, string Driver);
 /// <summary>
 /// The only class that talks to NAPS2. Owns a long-lived <see cref="ScanningContext"/>
 /// (with the 32-bit worker set up so 32-bit TWAIN drivers work from this 64-bit process)
-/// and turns a <see cref="ScanRequest"/> into PDF or JPEG bytes.
+/// and turns a <see cref="ScanRequest"/> into a PDF, or into one JPEG per page.
 /// </summary>
 public sealed class ScannerService : IDisposable
 {
@@ -65,12 +66,12 @@ public sealed class ScannerService : IDisposable
         }
     }
 
-    public async Task<byte[]> ScanAsync(ScanRequest request, IProgress<int> pageProgress, CancellationToken cancellationToken)
+    public async Task<ScanOutput> ScanAsync(ScanRequest request, IProgress<int> pageProgress, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(request.DeviceId))
         {
             throw new ScanBridgeException(ScanErrorCodes.NoScannerConfigured,
-                "Nessuno scanner configurato. Selezionane uno nelle impostazioni di ScanBridge oppure indica scannerId.");
+                new LocalizedMessage(nameof(Strings.ScanNoScannerConfigured)));
         }
 
         var driver = ParseDriver(request.Driver);
@@ -103,34 +104,44 @@ public sealed class ScannerService : IDisposable
             if (images.Count == 0)
             {
                 throw new ScanBridgeException(ScanErrorCodes.NoPages,
-                    "Nessuna pagina scansionata. Controlla che il documento sia inserito nello scanner.");
+                    new LocalizedMessage(nameof(Strings.ScanNoPages)));
+            }
+
+            if (request.Format == ScanFormats.Jpg)
+            {
+                // One JPEG per page, so a feeder or duplex scan loses nothing. Render()
+                // applies the processing (deskew) that the PDF export also applies.
+                var jpegs = new List<byte[]>(images.Count);
+                var saveOptions = new ImageSaveOptions { Quality = request.JpegQuality };
+                foreach (var image in images)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    using var rendered = image.Render();
+                    using var jpeg = new MemoryStream();
+                    rendered.Save(jpeg, ImageFileFormat.Jpeg, saveOptions);
+                    jpegs.Add(jpeg.ToArray());
+                }
+
+                _logger.LogInformation("Scan finished: {Pages} page(s) as JPEG, {Bytes} bytes",
+                    jpegs.Count, jpegs.Sum(j => (long)j.Length));
+                return new ScanOutput(ScanFormats.Jpg, jpegs);
             }
 
             using var stream = new MemoryStream();
-            if (request.Format == ScanFormats.Jpg)
-            {
-                // Photos: only the first image is delivered, any others are discarded.
-                using var rendered = images[0].Render();
-                rendered.Save(stream, ImageFileFormat.Jpeg, new ImageSaveOptions { Quality = request.JpegQuality });
-                _logger.LogInformation("Scan finished: {Pages} page(s) scanned, first one returned as JPEG ({Bytes} bytes)",
-                    images.Count, stream.Length);
-                return stream.ToArray();
-            }
-
             var exporter = new PdfExporter(_scanningContext);
             await exporter.Export(stream, images, new PdfExportParams()).ConfigureAwait(false);
             _logger.LogInformation("Scan finished: {Pages} page(s), {Bytes} bytes of PDF", images.Count, stream.Length);
-            return stream.ToArray();
+            return ScanOutput.Pdf(stream.ToArray());
         }
         catch (DeviceOfflineException ex)
         {
             throw new ScanBridgeException(ScanErrorCodes.DeviceOffline,
-                "Lo scanner non risponde. Controlla che sia acceso e collegato al computer.", ex);
+                new LocalizedMessage(nameof(Strings.ScanDeviceOffline), ex.Message), ex);
         }
         catch (DeviceException ex)
         {
             throw new ScanBridgeException(ScanErrorCodes.ScanFailed,
-                $"La scansione non è riuscita: {ex.Message}", ex);
+                new LocalizedMessage(nameof(Strings.ScanFailed), ex.Message), ex);
         }
         finally
         {
@@ -166,7 +177,7 @@ public sealed class ScannerService : IDisposable
     {
         "legal" => PageSize.Legal,
         "a4" => PageSize.A4,
-        _ => PageSize.A4,
+        _ => PageSize.Letter,
     };
 
     public void Dispose()

@@ -39,13 +39,31 @@ Right-click the tray icon → **Settings…**
 | Setting | Meaning |
 |---|---|
 | Driver / Scanner | WIA (most Windows scanners), TWAIN (older drivers), or ESCL (network/AirScan, driverless). Refresh re-enumerates. |
-| Scan defaults | Paper source (flatbed / feeder / duplex), resolution, color mode, page size, blank-page removal, deskew. Web apps can override any of these per request. |
+| Scan defaults | Paper source (flatbed / feeder / duplex), resolution, color mode, page size, blank-page removal, deskew, and the JPG quality for web apps that ask for JPG. Web apps can override any of these per request. Scans are PDF unless the web app asks for `"format": "jpg"`. |
 | Port | The local HTTP port (default **7226**). ScanBridge listens on `127.0.0.1` only — it is never reachable from the network. |
 | Allowed website origins | Exact origins (e.g. `https://apps.example.gov`) allowed to call the API from a browser. Empty list = no site may use it. |
 | Start when I sign in | Per-user autostart (registry `Run` key). |
+| Language | **Automatic** follows the Windows display language. You can also pick a language. |
 
 Settings live in `%AppData%\ScanBridge\settings.json`; logs in
 `%LocalAppData%\ScanBridge\logs`.
+
+## Languages
+
+ScanBridge is available in English and Italian.
+
+- **Tray and settings window:** follow the Windows display language, or the **Language**
+  setting. If Windows uses a language without a translation, ScanBridge uses English.
+- **HTTP API:** error `message` texts follow the request's `Accept-Language` header, so a
+  web page shows them in its user's language. Error `code` values never change.
+- **Installer:** English or Italian, picked from the Windows language.
+- **Log files and Copy diagnostics:** always English, so that support staff can read them.
+
+To add a language, copy `src/ScanBridge/Localization/Strings.resx` to
+`Strings.<culture>.resx` (for example `Strings.es.resx`) and translate each `<value>`.
+Then add the language to `UiLanguage.Supported`, to `SatelliteResourceLanguages` in
+`ScanBridge.csproj`, and to the `[Languages]` section of `installer/ScanBridge.iss`. The
+tests in `LocalizationTests` fail if a key or a `{0}` placeholder is missing.
 
 ## Using it from a web page
 
@@ -74,6 +92,10 @@ const pdfBlob = await (await fetch(`http://127.0.0.1:7226/api/v1/scans/${jobId}/
   { targetAddressSpace: 'loopback' })).blob();
 ```
 
+For photos, send `{ "format": "jpg" }` instead. Each page is then its own JPEG: fetch
+`/document?page=1` to `/document?page=<job.fileCount>`. A request without `format`
+always gets a PDF.
+
 ### Browser requirements (Local Network Access)
 
 Calling `http://127.0.0.1` from an HTTPS page is allowed by Chrome, Edge and Firefox
@@ -90,6 +112,10 @@ GPO or Intune; Firefox has an equivalent `LocalNetworkAccess` policy).
 
 - The listener binds to `127.0.0.1` only — nothing on the network can reach it.
 - Browsers enforce CORS: only origins on the allowlist get responses.
+- A `POST` or `DELETE` from a website that is not on the allowlist gets `403`, so such a
+  site cannot start or cancel a scan, even with a request that skips the CORS preflight.
+- Only a `Host` header of `127.0.0.1:<port>` or `localhost:<port>` is accepted, which
+  blocks DNS rebinding.
 - Requests carry no credentials and ScanBridge stores no secrets; the worst a malicious
   allowed page could do is trigger a scan on the attached scanner.
 
