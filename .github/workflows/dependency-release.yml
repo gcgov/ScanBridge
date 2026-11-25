@@ -1,0 +1,75 @@
+name: Dependency release
+
+# Releases the dependency updates that Dependabot merged into main. The workflow tags
+# the next patch version and starts the Release workflow on that tag. The Release
+# workflow then publishes the GitHub release and uploads the installer to Intune.
+#
+# The workflow releases only when every commit since the last release comes from
+# Dependabot. When main also holds changes from people, you push the next tag by hand.
+#
+# Auto-merge uses GITHUB_TOKEN, and GitHub does not start workflows for events from
+# GITHUB_TOKEN. For this reason, the workflow runs on a schedule, not on each merge.
+# For the same reason, the tag push below does not start the Release workflow, so the
+# workflow starts it with "gh workflow run".
+on:
+  schedule:
+    # Weekdays at 17:23 UTC, so that a reviewer can approve the Intune upload.
+    - cron: '23 17 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: dependency-release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Tag and release the next patch version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          latest=$(git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)
+          if [ -z "$latest" ]; then
+            echo "No release tag such as v1.0.0 exists. Push the first tag by hand."
+            exit 0
+          fi
+
+          authors=$(git log --no-merges --format='%an' "$latest..HEAD")
+          if [ -z "$authors" ]; then
+            echo "main has no changes since $latest. Nothing to release."
+            exit 0
+          fi
+
+          others=$(grep -v -x 'dependabot\[bot\]' <<< "$authors" || true)
+          if [ -n "$others" ]; then
+            echo "main has changes from people since $latest. Push the next tag by hand."
+            exit 0
+          fi
+
+          IFS=. read -r major minor patch <<< "${latest#v}"
+          next="v$major.$minor.$((patch + 1))"
+          if git rev-parse -q --verify "refs/tags/$next" > /dev/null; then
+            echo "::error::Tag $next already exists. Check the release tags."
+            exit 1
+          fi
+
+          echo "Dependency updates since $latest:"
+          git log --no-merges --format='  %h %s' "$latest..HEAD"
+
+          git tag "$next" HEAD
+          git push origin "refs/tags/$next"
+          gh workflow run release.yml --ref "$next"
+          echo "Tagged $next and started the Release workflow."

@@ -1,0 +1,33 @@
+version: 2
+
+# Minor and patch updates come in one grouped pull request per ecosystem. The
+# "Dependabot auto-merge" workflow merges them after CI passes. Major updates come in
+# their own pull requests and wait for a person to review them.
+#
+# Security updates are separate pull requests. Turn them on in Settings > Advanced
+# Security > Dependabot security updates. A minor or patch security update also
+# merges automatically.
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/New_York
+    open-pull-requests-limit: 10
+    groups:
+      nuget-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/New_York
+    open-pull-requests-limit: 10
+    groups:
+      actions-minor-and-patch:
+        update-types: [minor, patch]
