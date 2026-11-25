@@ -17,9 +17,9 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
@@ -86,7 +86,7 @@ jobs:
           files: ${{ github.workspace }}\ScanBridge-${{ steps.version.outputs.version }}-setup.exe
 
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             ScanBridge-${{ steps.version.outputs.version }}-win-x64-portable.zip
@@ -95,7 +95,7 @@ jobs:
 
       # The intune job packages this installer.
       - name: Keep installer for Intune
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: installer
           path: ScanBridge-${{ steps.version.outputs.version }}-setup.exe
@@ -128,12 +128,12 @@ jobs:
           "deploy=$($deploy.ToString().ToLower())" >> $env:GITHUB_OUTPUT
           if (-not $deploy) { Write-Host "Skipped: INTUNE_APP_ID or INTUNE_CLIENT_ID is not set, or $env:VERSION is a prerelease." }
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: steps.check.outputs.deploy == 'true'
 
       - name: Get Win32 Content Prep Tool
         if: steps.check.outputs.deploy == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: microsoft/Microsoft-Win32-Content-Prep-Tool
           ref: v1.8.7
@@ -141,7 +141,7 @@ jobs:
 
       - name: Get installer
         if: steps.check.outputs.deploy == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: installer
 
