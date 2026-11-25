@@ -8,6 +8,15 @@ public class SettingsStoreTests : IDisposable
     private readonly string _tempDir = Path.Combine(Path.GetTempPath(), "ScanBridgeTests-" + Guid.NewGuid().ToString("N"));
 
     [Fact]
+    public void DefaultPageSizeIsA4AndDefaultFormatIsPdf()
+    {
+        var defaults = new AppSettings().Defaults;
+
+        Assert.Equal("a4", defaults.PageSize);
+        Assert.Equal("pdf", defaults.Format);
+    }
+
+    [Fact]
     public void LoadWithoutFileReturnsDefaultsAndFlagsFirstRun()
     {
         var store = new SettingsStore(_tempDir);
@@ -35,6 +44,7 @@ public class SettingsStoreTests : IDisposable
         };
         settings.Defaults.Dpi = 200;
         settings.Defaults.PaperSource = "duplex";
+        settings.Defaults.Format = "jpg";
         store.Save(settings);
 
         var reloaded = new SettingsStore(_tempDir).Load();
@@ -45,6 +55,7 @@ public class SettingsStoreTests : IDisposable
         Assert.Equal("Test Scanner", reloaded.ScannerDeviceName);
         Assert.Equal(200, reloaded.Defaults.Dpi);
         Assert.Equal("duplex", reloaded.Defaults.PaperSource);
+        Assert.Equal("jpg", reloaded.Defaults.Format);
         Assert.False(reloaded.RunAtLogin);
     }
 

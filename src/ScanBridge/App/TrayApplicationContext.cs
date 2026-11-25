@@ -16,6 +16,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly ScanJobManager _jobManager;
     private readonly WebHostRunner _webHostRunner;
     private readonly NotifyIcon _notifyIcon;
+    private readonly ToolStripMenuItem _statusItem = new() { Enabled = false };
     private readonly SynchronizationContext _syncContext;
     private SettingsForm? _settingsForm;
     private bool _testScanRunning;
@@ -34,11 +35,13 @@ public sealed class TrayApplicationContext : ApplicationContext
         _syncContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Settings…", null, (_, _) => ShowSettings());
-        menu.Items.Add("Scan test page", null, (_, _) => RunTestScan());
-        menu.Items.Add("Open log folder", null, (_, _) => OpenLogFolder());
+        menu.Items.Add(_statusItem);
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Exit", null, (_, _) => ExitApplication());
+        menu.Items.Add("Impostazioni…", null, (_, _) => ShowSettings());
+        menu.Items.Add("Scansione di prova", null, (_, _) => RunTestScan());
+        menu.Items.Add("Apri cartella dei log", null, (_, _) => LogFolder.Open());
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Esci", null, (_, _) => ExitApplication());
 
         _notifyIcon = new NotifyIcon
         {
@@ -49,8 +52,10 @@ public sealed class TrayApplicationContext : ApplicationContext
         };
         _notifyIcon.DoubleClick += (_, _) => ShowSettings();
 
+        _jobManager.JobStarted += OnJobStarted;
         _jobManager.JobFinished += OnJobFinished;
         _webHostRunner.StatusChanged += OnListenerStatusChanged;
+        UpdateStatus();
 
         if (_webHostRunner.LastError is { } startupError)
         {
@@ -95,6 +100,28 @@ public sealed class TrayApplicationContext : ApplicationContext
         _settingsForm.Show();
     }
 
+    private static async Task DeleteTempFileLaterAsync(string path)
+    {
+        // Retry: a viewer that keeps the file locked makes the first attempts fail.
+        for (var attempt = 0; attempt < 12; attempt++)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(10));
+            try
+            {
+                File.Delete(path);
+                return;
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+
+        Log.Warning("Could not delete temporary test scan {Path}", path);
+    }
+
     private async void RunTestScan()
     {
         if (_testScanRunning)
@@ -105,7 +132,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         var settings = _settingsStore.Current;
         if (string.IsNullOrEmpty(settings.ScannerDeviceId))
         {
-            ShowBalloon("ScanBridge", "No scanner is configured yet — open Settings first.", ToolTipIcon.Warning);
+            ShowBalloon("ScanBridge", "Nessuno scanner configurato: apri prima le Impostazioni.", ToolTipIcon.Warning);
             ShowSettings();
             return;
         }
@@ -120,29 +147,36 @@ public sealed class TrayApplicationContext : ApplicationContext
             ColorMode: defaults.ColorMode,
             PageSize: defaults.PageSize,
             ExcludeBlankPages: defaults.ExcludeBlankPages,
-            AutoDeskew: defaults.AutoDeskew);
+            AutoDeskew: defaults.AutoDeskew,
+            Format: ScanFormats.TryNormalize(defaults.Format, out var format) ? format : ScanFormats.Pdf,
+            JpegQuality: ScanFormats.IsValidJpegQuality(defaults.JpegQuality) ? defaults.JpegQuality : ScanFormats.DefaultJpegQuality);
 
         var job = _jobManager.TryStart(request, out var errorCode);
         if (job is null)
         {
-            ShowBalloon("ScanBridge", "A scan is already in progress.", ToolTipIcon.Warning);
+            ShowBalloon("ScanBridge", "Una scansione è già in corso.", ToolTipIcon.Warning);
             return;
         }
 
         _testScanRunning = true;
         try
         {
-            ShowBalloon("ScanBridge", "Scanning a test page…", ToolTipIcon.Info);
+            ShowBalloon("ScanBridge", "Scansione di prova in corso…", ToolTipIcon.Info);
             while (!job.IsTerminal)
             {
                 await Task.Delay(500);
             }
 
-            if (job.Status == ScanJobStatus.Completed && job.PdfBytes is { } pdfBytes)
+            if (job.Status == ScanJobStatus.Completed && job.ContentBytes is { } pdfBytes)
             {
-                var pdfPath = Path.Combine(Path.GetTempPath(), $"scanbridge-test-{job.Id}.pdf");
+                var extension = Path.GetExtension(ScanFormats.FileNameForContentType(job.ContentType));
+                var pdfPath = Path.Combine(Path.GetTempPath(), $"scanbridge-test-{job.Id}{extension}");
                 await File.WriteAllBytesAsync(pdfPath, pdfBytes);
                 Process.Start(new ProcessStartInfo(pdfPath) { UseShellExecute = true });
+
+                // The PDF may contain personal data: don't leave it in %TEMP%. The viewer
+                // needs a moment to open the file, so delete after a delay (best effort).
+                _ = DeleteTempFileLaterAsync(pdfPath);
             }
 
             // Failure balloons come from OnJobFinished, shared with browser-initiated jobs.
@@ -150,7 +184,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         catch (Exception ex)
         {
             Log.Error(ex, "Test scan failed");
-            ShowBalloon("ScanBridge", $"Test scan failed: {ex.Message}", ToolTipIcon.Error);
+            ShowBalloon("ScanBridge", $"Scansione di prova non riuscita: {ex.Message}", ToolTipIcon.Error);
         }
         finally
         {
@@ -159,20 +193,21 @@ public sealed class TrayApplicationContext : ApplicationContext
         }
     }
 
-    private void OpenLogFolder()
-    {
-        var logDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ScanBridge", "logs");
-        Directory.CreateDirectory(logDirectory);
-        Process.Start(new ProcessStartInfo(logDirectory) { UseShellExecute = true });
-    }
+    private void OnJobStarted(ScanJob job) => UpdateStatus();
 
     private void OnJobFinished(ScanJob job)
     {
-        if (job.Status == ScanJobStatus.Failed)
+        switch (job.Status)
         {
-            ShowBalloon("ScanBridge — scan failed", job.ErrorMessage ?? "The scan failed.", ToolTipIcon.Error);
+            case ScanJobStatus.Completed:
+                ShowBalloon("ScanBridge", "Scansione completata.", ToolTipIcon.Info);
+                break;
+            case ScanJobStatus.Failed:
+                ShowBalloon("ScanBridge — scansione non riuscita", job.ErrorMessage ?? "La scansione non è riuscita.", ToolTipIcon.Error);
+                break;
         }
+
+        UpdateStatus();
     }
 
     private void OnListenerStatusChanged()
@@ -181,6 +216,34 @@ public sealed class TrayApplicationContext : ApplicationContext
         {
             ShowBalloon("ScanBridge", error, ToolTipIcon.Warning);
         }
+
+        UpdateStatus();
+    }
+
+    /// <summary>Refreshes the tooltip on the tray icon and the status line at the top of the menu.</summary>
+    private void UpdateStatus()
+    {
+        _syncContext.Post(_ =>
+        {
+            string state;
+            if (!_webHostRunner.IsRunning)
+            {
+                state = _webHostRunner.LastError is null ? "Non in ascolto" : "Errore: server non avviato";
+            }
+            else if (_jobManager.ActiveJob is not null)
+            {
+                state = "Scansione in corso…";
+            }
+            else
+            {
+                state = $"Pronto · porta {_settingsStore.Current.Port}";
+            }
+
+            var text = $"ScanBridge v{AppInfo.Version} · {state}";
+            _statusItem.Text = text;
+            // NotifyIcon.Text is limited to 127 characters.
+            _notifyIcon.Text = text.Length <= 127 ? text : text[..127];
+        }, null);
     }
 
     private void ShowBalloon(string title, string message, ToolTipIcon icon)
@@ -199,6 +262,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     {
         if (disposing)
         {
+            _jobManager.JobStarted -= OnJobStarted;
             _jobManager.JobFinished -= OnJobFinished;
             _webHostRunner.StatusChanged -= OnListenerStatusChanged;
             _notifyIcon.Dispose();

@@ -7,6 +7,12 @@ Browsers must be subject to the CORS allowlist: the calling page's origin has to
 listed under *Allowed website origins* in ScanBridge settings. Same-machine tools
 (curl, desktop apps) are not subject to CORS.
 
+Every `POST` and `DELETE` request under `/api/v1` must carry the custom header
+`X-ScanBridge` (any value, e.g. `X-ScanBridge: 1`), otherwise the server answers `403`.
+A custom header forces browsers to run a CORS preflight, so a page that is not in the
+allowlist cannot start a scan. Requests whose `Host` header is not `127.0.0.1:<port>` or
+`localhost:<port>` are also rejected with `403` (DNS rebinding protection).
+
 Requests from browsers should pass `targetAddressSpace: 'loopback'` in the `fetch`
 options to satisfy Chrome's Local Network Access rules (Chrome 142+).
 
@@ -62,14 +68,20 @@ Starts a scan job. Body is optional; every field falls back to the configured de
   "duplex": false,               // shorthand for paperSource: "duplex"
   "dpi": 300,
   "colorMode": "color",         // "color" | "grayscale" | "blackAndWhite"
-  "pageSize": "letter",         // "letter" | "legal" | "a4"
+  "pageSize": "a4",             // "a4" (default) | "letter" | "legal"
   "excludeBlankPages": false,
-  "autoDeskew": false
+  "autoDeskew": false,
+  "format": "pdf",               // "pdf" (default) | "jpg"
+  "jpegQuality": 85              // 1-100, only used with "jpg"
 }
 ```
 
+If `format` is omitted, the default chosen in the ScanBridge settings window
+(*Output format*, PDF unless changed) is used. With `"format": "jpg"` only the first scanned image is returned, as a JPEG; any further
+pages are discarded. `jpegQuality` defaults to the value in the settings window (85).
+
 Responses: `202 Accepted` with `{ "jobId": "…" }` (Location header points at the job),
-`409` `scannerBusy`, `422` `noScannerConfigured`.
+`400` `invalidFormat` / `invalidJpegQuality`, `409` `scannerBusy`, `422` `noScannerConfigured`.
 
 ### `GET /api/v1/scans/{jobId}`
 
@@ -84,9 +96,11 @@ Polls a job.
 
 ### `GET /api/v1/scans/{jobId}/document`
 
-Returns the finished scan as `application/pdf`. `409 notReady` while the job is still
+Returns the finished scan as `application/pdf`, or `image/jpeg` if the job was started
+with `"format": "jpg"`. `409 notReady` while the job is still
 running; `410` with the failure code if the job ended without a document; `404` for
-unknown ids.
+unknown ids. Add `?deleteAfterDownload=true` to discard the job from memory as soon as
+the document has been sent (a second download then returns `404`).
 
 ### `DELETE /api/v1/scans/{jobId}`
 

@@ -20,7 +20,7 @@ public class ScanJobManagerTests
     }
 
     [Fact]
-    public async Task CompletedJobExposesPdfBytes()
+    public async Task CompletedJobExposesContentBytes()
     {
         using var manager = new ScanJobManager((_, progress, _) =>
         {
@@ -35,7 +35,7 @@ public class ScanJobManagerTests
 
         await WaitForTerminal(job!);
         Assert.Equal(ScanJobStatus.Completed, job!.Status);
-        Assert.Equal(new byte[] { 1, 2, 3 }, job.PdfBytes);
+        Assert.Equal(new byte[] { 1, 2, 3 }, job.ContentBytes);
         Assert.Null(job.ErrorCode);
     }
 

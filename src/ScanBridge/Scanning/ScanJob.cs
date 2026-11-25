@@ -46,7 +46,31 @@ public sealed record ScanRequest(
     string ColorMode,
     string PageSize,
     bool ExcludeBlankPages,
-    bool AutoDeskew);
+    bool AutoDeskew,
+    string Format = ScanFormats.Pdf,
+    int JpegQuality = ScanFormats.DefaultJpegQuality);
+
+/// <summary>Output formats a scan can be delivered in.</summary>
+public static class ScanFormats
+{
+    public const string Pdf = "pdf";
+    public const string Jpg = "jpg";
+    public const int DefaultJpegQuality = 85;
+
+    public static bool IsValidJpegQuality(int quality) => quality is >= 1 and <= 100;
+
+    public static bool TryNormalize(string? value, out string format)
+    {
+        format = (value ?? Pdf).Trim().ToLowerInvariant();
+        return format is Pdf or Jpg;
+    }
+
+    public static string ContentTypeFor(string format) =>
+        format == Jpg ? "image/jpeg" : "application/pdf";
+
+    public static string FileNameForContentType(string contentType) =>
+        contentType == ContentTypeFor(Jpg) ? "scan.jpg" : "scan.pdf";
+}
 
 public sealed class ScanJob
 {
@@ -60,7 +84,10 @@ public sealed class ScanJob
 
     public string? ErrorMessage { get; internal set; }
 
-    public byte[]? PdfBytes { get; internal set; }
+    /// <summary>The finished document (PDF or JPEG, see <see cref="ContentType"/>).</summary>
+    public byte[]? ContentBytes { get; internal set; }
+
+    public string ContentType { get; internal set; } = ScanFormats.ContentTypeFor(ScanFormats.Pdf);
 
     public DateTimeOffset CreatedUtc { get; } = DateTimeOffset.UtcNow;
 

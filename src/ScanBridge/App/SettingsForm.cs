@@ -19,12 +19,14 @@ public sealed class SettingsForm : Form
 
     private static readonly string[] DriverLabels = ["WIA", "TWAIN", "ESCL"];
     private static readonly string[] DriverValues = ["wia", "twain", "escl"];
-    private static readonly string[] SourceLabels = ["Flatbed", "Document feeder", "Document feeder (duplex)"];
+    private static readonly string[] SourceLabels = ["Piano di scansione", "Caricatore documenti", "Caricatore documenti (fronte/retro)"];
     private static readonly string[] SourceValues = ["flatbed", "feeder", "duplex"];
-    private static readonly string[] ColorLabels = ["Color", "Grayscale", "Black & white"];
+    private static readonly string[] ColorLabels = ["Colore", "Scala di grigi", "Bianco e nero"];
     private static readonly string[] ColorValues = ["color", "grayscale", "blackAndWhite"];
-    private static readonly string[] PageSizeLabels = ["Letter", "Legal", "A4"];
-    private static readonly string[] PageSizeValues = ["letter", "legal", "a4"];
+    private static readonly string[] PageSizeLabels = ["A4", "Letter", "Legal"];
+    private static readonly string[] PageSizeValues = ["a4", "letter", "legal"];
+    private static readonly string[] FormatLabels = ["PDF (tutte le pagine)", "JPG (solo la prima immagine)"];
+    private static readonly string[] FormatValues = ["pdf", "jpg"];
     private static readonly int[] DpiChoices = [100, 150, 200, 300, 400, 600];
 
     private readonly SettingsStore _settingsStore;
@@ -34,24 +36,26 @@ public sealed class SettingsForm : Form
 
     private readonly ComboBox _driverCombo = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 150 };
     private readonly ComboBox _deviceCombo = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 320 };
-    private readonly Button _refreshButton = new() { Text = "Refresh", AutoSize = true };
+    private readonly Button _refreshButton = new() { Text = "Aggiorna", AutoSize = true };
     private readonly Label _scannerStatusLabel = new() { AutoSize = true, ForeColor = SystemColors.GrayText, Text = string.Empty };
 
     private readonly ComboBox _sourceCombo = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 220 };
     private readonly ComboBox _dpiCombo = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 100 };
     private readonly ComboBox _colorCombo = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 150 };
     private readonly ComboBox _pageSizeCombo = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 100 };
-    private readonly CheckBox _blankPagesCheck = new() { Text = "Remove blank pages", AutoSize = true };
-    private readonly CheckBox _deskewCheck = new() { Text = "Straighten (deskew) pages", AutoSize = true };
+    private readonly CheckBox _blankPagesCheck = new() { Text = "Rimuovi le pagine bianche", AutoSize = true };
+    private readonly CheckBox _deskewCheck = new() { Text = "Raddrizza le pagine (deskew)", AutoSize = true };
+    private readonly NumericUpDown _jpegQualityInput = new() { Minimum = 1, Maximum = 100, Width = 80 };
+    private readonly ComboBox _formatCombo = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 220 };
 
     private readonly NumericUpDown _portInput = new() { Minimum = 1024, Maximum = 65535, Width = 100 };
     private readonly ListBox _originsList = new() { Width = 420, Height = 90 };
-    private readonly TextBox _originInput = new() { Width = 300, PlaceholderText = "https://apps.example.gov" };
-    private readonly Button _addOriginButton = new() { Text = "Add", AutoSize = true };
-    private readonly Button _removeOriginButton = new() { Text = "Remove selected", AutoSize = true };
+    private readonly TextBox _originInput = new() { Width = 280, PlaceholderText = "https://apps.example.gov" };
+    private readonly Button _addOriginButton = new() { Text = "Aggiungi", AutoSize = true };
+    private readonly Button _removeOriginButton = new() { Text = "Rimuovi selezionata", AutoSize = true };
     private readonly Label _listenerStatusLabel = new() { AutoSize = true, ForeColor = SystemColors.GrayText, Text = string.Empty };
 
-    private readonly CheckBox _runAtLoginCheck = new() { Text = "Start ScanBridge when I sign in to Windows", AutoSize = true };
+    private readonly CheckBox _runAtLoginCheck = new() { Text = "Avvia ScanBridge all'accesso a Windows", AutoSize = true };
 
     public SettingsForm(SettingsStore settingsStore, ScannerService scannerService, WebHostRunner webHostRunner)
     {
@@ -60,7 +64,7 @@ public sealed class SettingsForm : Form
         _webHostRunner = webHostRunner;
         _syncContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
 
-        Text = "ScanBridge Settings";
+        Text = $"ScanBridge v{AppInfo.Version} - Impostazioni";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
@@ -111,30 +115,46 @@ public sealed class SettingsForm : Form
         scannerLayout.SetColumnSpan(_scannerStatusLabel, 2);
         scannerGroup.Controls.Add(scannerLayout);
 
-        var defaultsGroup = new GroupBox { Text = "Scan defaults", AutoSize = true, Dock = DockStyle.Top, Padding = new Padding(10) };
+        var defaultsGroup = new GroupBox { Text = "Impostazioni di scansione predefinite", AutoSize = true, Dock = DockStyle.Top, Padding = new Padding(10) };
         var defaultsLayout = new TableLayoutPanel { AutoSize = true, ColumnCount = 4, Dock = DockStyle.Fill };
-        defaultsLayout.Controls.Add(new Label { Text = "Source:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
+        defaultsLayout.Controls.Add(new Label { Text = "Origine:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
         defaultsLayout.Controls.Add(_sourceCombo, 1, 0);
-        defaultsLayout.Controls.Add(new Label { Text = "Resolution:", AutoSize = true, Anchor = AnchorStyles.Left }, 2, 0);
+        defaultsLayout.Controls.Add(new Label { Text = "Risoluzione:", AutoSize = true, Anchor = AnchorStyles.Left }, 2, 0);
         defaultsLayout.Controls.Add(_dpiCombo, 3, 0);
-        defaultsLayout.Controls.Add(new Label { Text = "Color:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 1);
+        defaultsLayout.Controls.Add(new Label { Text = "Colore:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 1);
         defaultsLayout.Controls.Add(_colorCombo, 1, 1);
-        defaultsLayout.Controls.Add(new Label { Text = "Page size:", AutoSize = true, Anchor = AnchorStyles.Left }, 2, 1);
+        defaultsLayout.Controls.Add(new Label { Text = "Formato pagina:", AutoSize = true, Anchor = AnchorStyles.Left }, 2, 1);
         defaultsLayout.Controls.Add(_pageSizeCombo, 3, 1);
         defaultsLayout.Controls.Add(_blankPagesCheck, 1, 2);
         defaultsLayout.Controls.Add(_deskewCheck, 1, 3);
+        defaultsLayout.Controls.Add(new Label { Text = "Formato di output:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 4);
+        defaultsLayout.Controls.Add(_formatCombo, 1, 4);
+        defaultsLayout.SetColumnSpan(_formatCombo, 3);
+        var formatHelp = new Label
+        {
+            Text = "Usato quando il sito non indica un formato. Il JPG contiene solo la prima immagine " +
+                   "scansionata (per foto e documenti su un solo lato); il PDF contiene tutte le pagine. " +
+                   "Il sito può sostituirlo con \"format\": \"pdf\" oppure \"jpg\".",
+            AutoSize = true,
+            MaximumSize = new Size(460, 0),
+            ForeColor = SystemColors.GrayText,
+        };
+        defaultsLayout.Controls.Add(formatHelp, 1, 5);
+        defaultsLayout.SetColumnSpan(formatHelp, 3);
+        defaultsLayout.Controls.Add(new Label { Text = "Qualità JPG (1-100):", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 6);
+        defaultsLayout.Controls.Add(_jpegQualityInput, 1, 6);
         defaultsLayout.SetColumnSpan(_blankPagesCheck, 3);
         defaultsLayout.SetColumnSpan(_deskewCheck, 3);
         defaultsGroup.Controls.Add(defaultsLayout);
 
-        var serverGroup = new GroupBox { Text = "Local server", AutoSize = true, Dock = DockStyle.Top, Padding = new Padding(10) };
+        var serverGroup = new GroupBox { Text = "Server locale", AutoSize = true, Dock = DockStyle.Top, Padding = new Padding(10) };
         var serverLayout = new TableLayoutPanel { AutoSize = true, ColumnCount = 3, Dock = DockStyle.Fill };
-        serverLayout.Controls.Add(new Label { Text = "Port:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
+        serverLayout.Controls.Add(new Label { Text = "Porta:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
         serverLayout.Controls.Add(_portInput, 1, 0);
         serverLayout.Controls.Add(_listenerStatusLabel, 2, 0);
         var originsLabel = new Label
         {
-            Text = "Allowed website origins (only these sites may use the scanner from a browser):",
+            Text = "Siti autorizzati (solo questi siti possono usare lo scanner dal browser):",
             AutoSize = true,
             Anchor = AnchorStyles.Left,
         };
@@ -152,9 +172,15 @@ public sealed class SettingsForm : Form
 
         var startupPanel = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Top, Padding = new Padding(4) };
         startupPanel.Controls.Add(_runAtLoginCheck);
+        var openLogsButton = new Button { Text = "Apri cartella dei log", AutoSize = true };
+        openLogsButton.Click += (_, _) => LogFolder.Open();
+        startupPanel.Controls.Add(openLogsButton);
+        var copyDiagnosticsButton = new Button { Text = "Copia diagnostica", AutoSize = true };
+        copyDiagnosticsButton.Click += (_, _) => CopyDiagnostics();
+        startupPanel.Controls.Add(copyDiagnosticsButton);
 
-        var saveButton = new Button { Text = "Save", AutoSize = true, DialogResult = DialogResult.OK };
-        var cancelButton = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel };
+        var saveButton = new Button { Text = "Salva", AutoSize = true, DialogResult = DialogResult.OK };
+        var cancelButton = new Button { Text = "Annulla", AutoSize = true, DialogResult = DialogResult.Cancel };
         saveButton.Click += (_, _) => SaveAndClose();
         cancelButton.Click += (_, _) => Close();
         AcceptButton = saveButton;
@@ -178,7 +204,7 @@ public sealed class SettingsForm : Form
 
         AutoSize = true;
         AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        MinimumSize = new Size(500, 0);
+        MinimumSize = new Size(650, 0);
     }
 
     private void LoadFromSettings(AppSettings settings)
@@ -203,6 +229,9 @@ public sealed class SettingsForm : Form
         _pageSizeCombo.SelectedIndex = Math.Max(0, Array.IndexOf(PageSizeValues, settings.Defaults.PageSize));
         _blankPagesCheck.Checked = settings.Defaults.ExcludeBlankPages;
         _deskewCheck.Checked = settings.Defaults.AutoDeskew;
+        _formatCombo.Items.AddRange([.. FormatLabels]);
+        _formatCombo.SelectedIndex = Math.Max(0, Array.IndexOf(FormatValues, settings.Defaults.Format));
+        _jpegQualityInput.Value = Math.Clamp(settings.Defaults.JpegQuality, 1, 100);
 
         _portInput.Value = Math.Clamp(settings.Port, (int)_portInput.Minimum, (int)_portInput.Maximum);
         foreach (var origin in settings.AllowedOrigins)
@@ -217,7 +246,7 @@ public sealed class SettingsForm : Form
     {
         var driver = DriverValues[Math.Max(0, _driverCombo.SelectedIndex)];
         _refreshButton.Enabled = false;
-        _scannerStatusLabel.Text = "Looking for scanners…";
+        _scannerStatusLabel.Text = "Ricerca degli scanner in corso…";
         try
         {
             var scanners = await _scannerService.ListScannersAsync(driver, refresh: true, CancellationToken.None);
@@ -242,13 +271,13 @@ public sealed class SettingsForm : Form
             }
 
             _scannerStatusLabel.Text = scanners.Count == 0
-                ? "No scanners found for this driver."
+                ? "Nessuno scanner trovato con questo driver."
                 : $"{scanners.Count} scanner(s) found.";
         }
         catch (Exception ex)
         {
             Log.Warning(ex, "Scanner enumeration failed");
-            _scannerStatusLabel.Text = $"Could not list scanners: {ex.Message}";
+            _scannerStatusLabel.Text = $"Impossibile elencare gli scanner: {ex.Message}";
         }
         finally
         {
@@ -261,8 +290,8 @@ public sealed class SettingsForm : Form
         if (!AppSettings.TryNormalizeOrigin(_originInput.Text, out var normalized))
         {
             MessageBox.Show(this,
-                "Enter a full origin such as https://apps.example.gov — scheme and host only, no path.",
-                "Invalid origin", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                "Inserisci un'origine completa, ad esempio https://apps.example.gov: solo protocollo e dominio, senza percorso.",
+                "Origine non valida", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
@@ -290,6 +319,8 @@ public sealed class SettingsForm : Form
         settings.Defaults.PageSize = PageSizeValues[Math.Max(0, _pageSizeCombo.SelectedIndex)];
         settings.Defaults.ExcludeBlankPages = _blankPagesCheck.Checked;
         settings.Defaults.AutoDeskew = _deskewCheck.Checked;
+        settings.Defaults.Format = FormatValues[Math.Max(0, _formatCombo.SelectedIndex)];
+        settings.Defaults.JpegQuality = (int)_jpegQualityInput.Value;
 
         settings.Port = (int)_portInput.Value;
         settings.AllowedOrigins = _originsList.Items.Cast<string>().ToList();
@@ -297,6 +328,35 @@ public sealed class SettingsForm : Form
 
         _settingsStore.Save(settings);
         Close();
+    }
+
+    /// <summary>Copies a short, non-sensitive summary of the setup to the clipboard for support.</summary>
+    private void CopyDiagnostics()
+    {
+        var settings = _settingsStore.Current;
+        var text = string.Join(Environment.NewLine,
+            $"ScanBridge v{AppInfo.Version}",
+            $"Windows: {Environment.OSVersion.VersionString}",
+            $".NET: {Environment.Version}",
+            $"Server: {(_webHostRunner.IsRunning ? "in ascolto" : "non in ascolto")} sulla porta {settings.Port}",
+            $"Ultimo errore: {_webHostRunner.LastError ?? "nessuno"}",
+            $"Driver: {settings.ScannerDriver ?? "wia"}",
+            $"Scanner: {settings.ScannerDeviceName ?? "non configurato"} ({settings.ScannerDeviceId ?? "-"})",
+            $"Formato: {settings.Defaults.Format}, qualità JPG {settings.Defaults.JpegQuality}, {settings.Defaults.Dpi} dpi, {settings.Defaults.PageSize}",
+            $"Siti autorizzati: {(settings.AllowedOrigins.Count == 0 ? "nessuno" : string.Join(", ", settings.AllowedOrigins))}",
+            $"Cartella dei log: {LogFolder.Path}");
+
+        try
+        {
+            Clipboard.SetText(text);
+            MessageBox.Show(this, "Diagnostica copiata negli appunti.", "ScanBridge",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            MessageBox.Show(this, "Impossibile accedere agli appunti. Riprova.", "ScanBridge",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private void OnListenerStatusChanged()
@@ -308,12 +368,12 @@ public sealed class SettingsForm : Form
     {
         if (_webHostRunner.IsRunning)
         {
-            _listenerStatusLabel.Text = $"Listening on http://127.0.0.1:{_settingsStore.Current.Port}";
+            _listenerStatusLabel.Text = $"In ascolto su http://127.0.0.1:{_settingsStore.Current.Port}";
             _listenerStatusLabel.ForeColor = Color.DarkGreen;
         }
         else
         {
-            _listenerStatusLabel.Text = _webHostRunner.LastError ?? "Not listening";
+            _listenerStatusLabel.Text = _webHostRunner.LastError ?? "Non in ascolto";
             _listenerStatusLabel.ForeColor = Color.Firebrick;
         }
     }
