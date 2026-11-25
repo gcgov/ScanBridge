@@ -183,6 +183,7 @@ To limit who can create `v*` tags, add a tag ruleset in **Settings** > **Rules**
 | `azure/login` fails in the `intune` job | The Intune publisher app has no federated credential for the `intune` environment of this repository, or `AZURE_TENANT_ID` is missing from the `intune` environment. |
 | `403 Forbidden` from Microsoft Graph | The Intune publisher app has no `DeviceManagementApps.ReadWrite.All` permission, or no admin consent. Do step 1 again. |
 | `404 Not Found` from Microsoft Graph | `INTUNE_APP_ID` does not match an app in the tenant. Check the value. |
+| The install fails with `Access is denied. (0x80070005)` | The installer exited with code 5: it stopped because it could not replace a file. Usually a running ScanBridge held the file. Installers built before `CloseApplications=force` have this problem. On the computer, exit ScanBridge from the tray icon, and then select **Sync** in Company Portal. |
 | The install fails on a computer | Read `C:\ProgramData\Microsoft\IntuneManagementExtension\Logs\AppWorkload.log` on that computer. |
 
 To upload a release again, open its **Release** run in the **Actions** tab. Select

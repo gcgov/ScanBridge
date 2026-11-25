@@ -24,8 +24,11 @@ SetupIconFile=..\src\ScanBridge\Resources\scanbridge.ico
 UninstallDisplayIcon={app}\ScanBridge.exe
 Compression=lzma2
 SolidCompression=yes
-; Ask a running ScanBridge to close before replacing files.
-CloseApplications=yes
+; Close a running ScanBridge before replacing files. ScanBridge is a tray app with no main window,
+; so it ignores the polite close request from Windows Restart Manager. "force" ends it.
+; Without this, a silent upgrade cannot replace ScanBridge.exe and exits with code 5, which
+; Intune shows as "Access is denied. (0x80070005)".
+CloseApplications=force
 WizardStyle=modern
 ; Show the language dialog only when no installer language matches the Windows language.
 ShowLanguageDialog=auto
