@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="NotListening" xml:space="preserve">
+    <value>Not listening</value>
+    <comment>Status of the local server.</comment>
+  </data>
+  <data name="OpenLogFolder" xml:space="preserve">
+    <value>Open log folder</value>
+    <comment>Tray menu item and button.</comment>
+  </data>
+  <data name="TrayMenuSettings" xml:space="preserve">
+    <value>Settings…</value>
+    <comment>Tray menu item.</comment>
+  </data>
+  <data name="TrayMenuTestScan" xml:space="preserve">
+    <value>Scan test page</value>
+    <comment>Tray menu item.</comment>
+  </data>
+  <data name="TrayMenuExit" xml:space="preserve">
+    <value>Exit</value>
+    <comment>Tray menu item.</comment>
+  </data>
+  <data name="TrayStatusServerError" xml:space="preserve">
+    <value>Error: server not started</value>
+    <comment>Tray status line when the local server failed to start.</comment>
+  </data>
+  <data name="TrayStatusScanning" xml:space="preserve">
+    <value>Scanning…</value>
+    <comment>Tray status line during a scan.</comment>
+  </data>
+  <data name="TrayStatusReady" xml:space="preserve">
+    <value>Ready · port {0}</value>
+    <comment>Tray status line. {0} = port number.</comment>
+  </data>
+  <data name="TrayStatusLine" xml:space="preserve">
+    <value>ScanBridge v{0} · {1}</value>
+    <comment>Tray tooltip. {0} = version, {1} = a TrayStatus text.</comment>
+  </data>
+  <data name="TrayNoScannerConfigured" xml:space="preserve">
+    <value>No scanner is configured yet. Open Settings first.</value>
+    <comment>Tray notification.</comment>
+  </data>
+  <data name="TrayTestScanStarted" xml:space="preserve">
+    <value>Scanning a test page…</value>
+    <comment>Tray notification.</comment>
+  </data>
+  <data name="TrayTestScanFailed" xml:space="preserve">
+    <value>Test scan failed: {0}</value>
+    <comment>Tray notification. {0} = error details.</comment>
+  </data>
+  <data name="TrayScanCompleted" xml:space="preserve">
+    <value>Scan completed.</value>
+    <comment>Tray notification.</comment>
+  </data>
+  <data name="TrayScanFailedTitle" xml:space="preserve">
+    <value>ScanBridge: scan failed</value>
+    <comment>Title of the tray notification for a failed scan.</comment>
+  </data>
+  <data name="SettingsTitle" xml:space="preserve">
+    <value>ScanBridge v{0} Settings</value>
+    <comment>Window title. {0} = version.</comment>
+  </data>
+  <data name="SettingsScannerGroup" xml:space="preserve">
+    <value>Scanner</value>
+    <comment>Group title.</comment>
+  </data>
+  <data name="SettingsDriverLabel" xml:space="preserve">
+    <value>Driver:</value>
+    <comment>Field label.</comment>
+  </data>
+  <data name="SettingsScannerLabel" xml:space="preserve">
+    <value>Scanner:</value>
+    <comment>Field label.</comment>
+  </data>
+  <data name="SettingsRefresh" xml:space="preserve">
+    <value>Refresh</value>
+    <comment>Button.</comment>
+  </data>
+  <data name="SettingsLookingForScanners" xml:space="preserve">
+    <value>Looking for scanners…</value>
+    <comment>Status text.</comment>
+  </data>
+  <data name="SettingsNoScannersFound" xml:space="preserve">
+    <value>No scanners found for this driver.</value>
+    <comment>Status text.</comment>
+  </data>
+  <data name="SettingsScannersFound" xml:space="preserve">
+    <value>Scanners found: {0}.</value>
+    <comment>Status text. {0} = number of scanners.</comment>
+  </data>
+  <data name="SettingsScannerListFailed" xml:space="preserve">
+    <value>Could not list scanners: {0}</value>
+    <comment>Status text. {0} = error details.</comment>
+  </data>
+  <data name="SettingsDefaultsGroup" xml:space="preserve">
+    <value>Scan defaults</value>
+    <comment>Group title.</comment>
+  </data>
+  <data name="SettingsSourceLabel" xml:space="preserve">
+    <value>Source:</value>
+    <comment>Field label.</comment>
+  </data>
+  <data name="SettingsResolutionLabel" xml:space="preserve">
+    <value>Resolution:</value>
+    <comment>Field label.</comment>
+  </data>
+  <data name="SettingsColorLabel" xml:space="preserve">
+    <value>Color:</value>
+    <comment>Field label.</comment>
+  </data>
+  <data name="SettingsPageSizeLabel" xml:space="preserve">
+    <value>Page size:</value>
+    <comment>Field label.</comment>
+  </data>
+  <data name="SourceFlatbed" xml:space="preserve">
+    <value>Flatbed</value>
+    <comment>Paper source.</comment>
+  </data>
+  <data name="SourceFeeder" xml:space="preserve">
+    <value>Document feeder</value>
+    <comment>Paper source.</comment>
+  </data>
+  <data name="SourceDuplex" xml:space="preserve">
+    <value>Document feeder (duplex)</value>
+    <comment>Paper source.</comment>
+  </data>
+  <data name="ColorColor" xml:space="preserve">
+    <value>Color</value>
+    <comment>Color mode.</comment>
+  </data>
+  <data name="ColorGrayscale" xml:space="preserve">
+    <value>Grayscale</value>
+    <comment>Color mode.</comment>
+  </data>
+  <data name="ColorBlackAndWhite" xml:space="preserve">
+    <value>Black &amp; white</value>
+    <comment>Color mode.</comment>
+  </data>
+  <data name="SettingsRemoveBlankPages" xml:space="preserve">
+    <value>Remove blank pages</value>
+    <comment>Check box.</comment>
+  </data>
+  <data name="SettingsDeskew" xml:space="preserve">
+    <value>Straighten (deskew) pages</value>
+    <comment>Check box.</comment>
+  </data>
+  <data name="SettingsJpegQualityLabel" xml:space="preserve">
+    <value>JPG quality (1–100):</value>
+    <comment>Field label.</comment>
+  </data>
+  <data name="SettingsJpegQualityHelp" xml:space="preserve">
+    <value>Scans are PDF files. A website can ask for JPG images instead with "format": "jpg". This quality applies when the website does not send "jpegQuality".</value>
+    <comment>Help text under the JPG quality field. Keep "format", "jpg" and "jpegQuality" as they are.</comment>
+  </data>
+  <data name="SettingsServerGroup" xml:space="preserve">
+    <value>Local server</value>
+    <comment>Group title.</comment>
+  </data>
+  <data name="SettingsPortLabel" xml:space="preserve">
+    <value>Port:</value>
+    <comment>Field label.</comment>
+  </data>
+  <data name="SettingsListening" xml:space="preserve">
+    <value>Listening on http://127.0.0.1:{0}</value>
+    <comment>Status text. {0} = port number.</comment>
+  </data>
+  <data name="SettingsOriginsLabel" xml:space="preserve">
+    <value>Allowed website origins (only these sites may use the scanner from a browser):</value>
+    <comment>Field label.</comment>
+  </data>
+  <data name="SettingsAddOrigin" xml:space="preserve">
+    <value>Add</value>
+    <comment>Button.</comment>
+  </data>
+  <data name="SettingsRemoveOrigin" xml:space="preserve">
+    <value>Remove selected</value>
+    <comment>Button.</comment>
+  </data>
+  <data name="SettingsInvalidOriginTitle" xml:space="preserve">
+    <value>Invalid origin</value>
+    <comment>Message box title.</comment>
+  </data>
+  <data name="SettingsInvalidOriginMessage" xml:space="preserve">
+    <value>Enter a full origin such as https://apps.example.gov: scheme and host only, no path.</value>
+    <comment>Message box text.</comment>
+  </data>
+  <data name="SettingsRunAtLogin" xml:space="preserve">
+    <value>Start ScanBridge when I sign in to Windows</value>
+    <comment>Check box.</comment>
+  </data>
+  <data name="SettingsLanguageLabel" xml:space="preserve">
+    <value>Language:</value>
+    <comment>Field label.</comment>
+  </data>
+  <data name="SettingsLanguageAutomatic" xml:space="preserve">
+    <value>Automatic (Windows language)</value>
+    <comment>Language choice that follows Windows.</comment>
+  </data>
+  <data name="SettingsCopyDiagnostics" xml:space="preserve">
+    <value>Copy diagnostics</value>
+    <comment>Button.</comment>
+  </data>
+  <data name="SettingsDiagnosticsCopied" xml:space="preserve">
+    <value>Diagnostics copied to the clipboard.</value>
+    <comment>Message box text.</comment>
+  </data>
+  <data name="SettingsClipboardUnavailable" xml:space="preserve">
+    <value>Could not access the clipboard. Try again.</value>
+    <comment>Message box text.</comment>
+  </data>
+  <data name="SettingsSave" xml:space="preserve">
+    <value>Save</value>
+    <comment>Button.</comment>
+  </data>
+  <data name="SettingsCancel" xml:space="preserve">
+    <value>Cancel</value>
+    <comment>Button.</comment>
+  </data>
+  <data name="ServerPortInUse" xml:space="preserve">
+    <value>Could not listen on port {0}. Another program may be using it.</value>
+    <comment>{0} = port number.</comment>
+  </data>
+  <data name="ServerStartFailed" xml:space="preserve">
+    <value>The local server could not start: {0}</value>
+    <comment>{0} = error details.</comment>
+  </data>
+  <data name="ApiInvalidHost" xml:space="preserve">
+    <value>The Host header must be 127.0.0.1 or localhost with the ScanBridge port.</value>
+    <comment>API error.</comment>
+  </data>
+  <data name="ApiOriginNotAllowed" xml:space="preserve">
+    <value>The website {0} is not allowed to use ScanBridge. Add it in the ScanBridge settings.</value>
+    <comment>API error. {0} = website origin.</comment>
+  </data>
+  <data name="ApiInvalidFormat" xml:space="preserve">
+    <value>format must be "pdf" or "jpg".</value>
+    <comment>API error. Keep "format", "pdf" and "jpg" as they are.</comment>
+  </data>
+  <data name="ApiInvalidJpegQuality" xml:space="preserve">
+    <value>jpegQuality must be between 1 and 100.</value>
+    <comment>API error. Keep "jpegQuality" as it is.</comment>
+  </data>
+  <data name="ApiScanNotFound" xml:space="preserve">
+    <value>Unknown scan job.</value>
+    <comment>API error.</comment>
+  </data>
+  <data name="ApiScanNotFinished" xml:space="preserve">
+    <value>The scan has not finished yet.</value>
+    <comment>API error.</comment>
+  </data>
+  <data name="ApiScanDidNotComplete" xml:space="preserve">
+    <value>The scan did not complete.</value>
+    <comment>API error.</comment>
+  </data>
+  <data name="ApiPageNotFound" xml:space="preserve">
+    <value>The scan has no page {0}. It has {1} page(s).</value>
+    <comment>API error. {0} = requested page, {1} = number of pages.</comment>
+  </data>
+  <data name="ScanNoScannerConfigured" xml:space="preserve">
+    <value>No scanner is configured. Open ScanBridge settings and select a scanner.</value>
+    <comment>Scan error.</comment>
+  </data>
+  <data name="ScanScannerBusy" xml:space="preserve">
+    <value>A scan is already in progress.</value>
+    <comment>Scan error.</comment>
+  </data>
+  <data name="ScanDeviceOffline" xml:space="preserve">
+    <value>The scanner is not responding. Check that it is turned on and connected. ({0})</value>
+    <comment>Scan error. {0} = details from the scanner driver.</comment>
+  </data>
+  <data name="ScanNoPages" xml:space="preserve">
+    <value>No pages were scanned. Check that the document is loaded in the scanner.</value>
+    <comment>Scan error.</comment>
+  </data>
+  <data name="ScanCanceled" xml:space="preserve">
+    <value>The scan was canceled.</value>
+    <comment>Scan error.</comment>
+  </data>
+  <data name="ScanFailed" xml:space="preserve">
+    <value>The scan failed: {0}</value>
+    <comment>Scan error. {0} = details from the scanner driver.</comment>
+  </data>
+</root>

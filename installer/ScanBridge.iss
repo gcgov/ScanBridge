@@ -27,9 +27,24 @@ SolidCompression=yes
 ; Ask a running ScanBridge to close before replacing files.
 CloseApplications=yes
 WizardStyle=modern
+; Show the language dialog only when no installer language matches the Windows language.
+ShowLanguageDialog=auto
+
+; The installer's own language. ScanBridge itself follows the Windows display language
+; (or the choice in its settings window), not this choice.
+; To add a language, add a line here and the matching [CustomMessages] lines.
+[Languages]
+Name: "en"; MessagesFile: "compiler:Default.isl"
+Name: "it"; MessagesFile: "compiler:Languages\Italian.isl"
+
+[CustomMessages]
+en.AutostartTask=Start ScanBridge when I sign in to Windows
+it.AutostartTask=Avvia ScanBridge all'accesso a Windows
+en.StartupGroup=Startup:
+it.StartupGroup=Avvio:
 
 [Tasks]
-Name: "autostart"; Description: "Start ScanBridge when I sign in to Windows"; GroupDescription: "Startup:"
+Name: "autostart"; Description: "{cm:AutostartTask}"; GroupDescription: "{cm:StartupGroup}"
 
 [Files]
 Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
@@ -43,7 +58,7 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
   Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
-Filename: "{app}\ScanBridge.exe"; Description: "Launch ScanBridge now"; \
+Filename: "{app}\ScanBridge.exe"; Description: "{cm:LaunchProgram,ScanBridge}"; \
   Flags: nowait postinstall skipifsilent
 ; A silent install (Intune) closes a running ScanBridge before it replaces files.
 ; Start it again. On a first install, it opens the settings window, as an interactive install does.

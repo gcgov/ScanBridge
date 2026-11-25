@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using ScanBridge.App;
 using ScanBridge.Hosting;
+using ScanBridge.Localization;
 using ScanBridge.Scanning;
 using ScanBridge.Settings;
 using Serilog;
@@ -20,8 +21,7 @@ internal static class Program
             return;
         }
 
-        var logDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ScanBridge", "logs");
+        var logDirectory = ScanBridge.App.LogFolder.Path;
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
             .WriteTo.File(
@@ -37,6 +37,10 @@ internal static class Program
             var settingsStore = new SettingsStore();
             settingsStore.Load();
 
+            // Before any window or tray text is created.
+            var uiCulture = UiLanguage.Apply(settingsStore.Current.Language);
+            Log.Information("UI language {Culture} (setting {Setting})", uiCulture.Name, settingsStore.Current.Language);
+
             try
             {
                 StartupRegistration.Apply(settingsStore.Current.RunAtLogin);
@@ -48,11 +52,14 @@ internal static class Program
 
             using var loggerFactory = new SerilogLoggerFactory(Log.Logger);
             using var scannerService = new ScannerService(loggerFactory.CreateLogger("ScanBridge.Scanning"));
-            using var jobManager = new ScanJobManager(scannerService.ScanToPdfAsync);
+            using var jobManager = new ScanJobManager(scannerService.ScanAsync);
             var webHostRunner = new WebHostRunner(settingsStore, scannerService, jobManager, Log.Logger);
 
             settingsStore.Changed += settings =>
             {
+                // Runs before the tray's own handler, which rebuilds the menu in the new language.
+                UiLanguage.Apply(settings.Language);
+
                 try
                 {
                     StartupRegistration.Apply(settings.RunAtLogin);
